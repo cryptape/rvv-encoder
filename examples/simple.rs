@@ -1,3 +1,4 @@
+#![no_std]
 #![feature(asm)]
 #![feature(asm_const)]
 
