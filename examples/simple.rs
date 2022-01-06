@@ -1,4 +1,3 @@
-#![no_std]
 #![feature(asm)]
 #![feature(asm_const)]
 
@@ -13,10 +12,10 @@ fn main() {
     unsafe {
         rvv_asm!(
             "vsetvl x5, s3, t6",
-            "mv {a}, a3",
+            "mov {a}, 3",
             "vle256.v v3, (a0), vm",
             "1:",
-            "mv {hi}, a3",
+            "mov {hi}, 4",
             "vse64.v v3, (a0)",
             a = in(reg) a,
             hi = out(reg) hi,
