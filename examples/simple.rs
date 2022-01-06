@@ -14,6 +14,7 @@ fn main() {
             "vsetvl x5, s3, t6",
             "mv {a}, 4",
             "vle256.v v3, (a0), vm",
+            "1:",
             "mv {hi}, 3",
             "vse64.v v3, (a0)",
             a = in(reg) a,

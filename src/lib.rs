@@ -18,15 +18,20 @@ fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
     let inst_lower = inst.trim().to_lowercase();
     let re_inst = Regex::new(r"(?P<name>\S+)\s+(?P<args>.+)").unwrap();
     let re_args = Regex::new(r"\(?(?P<arg>\w+)\)?,?\s*").unwrap();
-    let caps = re_inst
-        .captures(&inst_lower)
-        .ok_or_else(|| anyhow!("Invalid instruction({}): name not found", inst))?;
+    let caps = if let Some(caps) = re_inst.captures(&inst_lower) {
+        caps
+    } else {
+        return Ok(None);
+    };
     let name = caps.name("name").unwrap().as_str();
     let args = caps.name("args").unwrap().as_str().trim();
     let args_vec = re_args
         .captures_iter(args)
         .map(|caps| caps["arg"].to_owned())
         .collect::<Vec<_>>();
+    if args_vec.is_empty() {
+        return Ok(None);
+    }
 
     if let Some((_, base, args_cfg)) = opcodes::INSTRUCTIONS
         .iter()
