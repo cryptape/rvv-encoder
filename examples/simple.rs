@@ -13,10 +13,10 @@ fn main() {
     unsafe {
         rvv_asm!(
             "vsetvl x5, s3, t6",
-            "mv {a}, 4",
+            "mv {a}, a3",
             "vle256.v v3, (a0), vm",
             "1:",
-            "mv {hi}, 3",
+            "mv {hi}, a3",
             "vse64.v v3, (a0)",
             a = in(reg) a,
             hi = out(reg) hi,

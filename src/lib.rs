@@ -1,11 +1,13 @@
 extern crate proc_macro;
+#[macro_use]
+extern crate pest_derive;
 
 use anyhow::{anyhow, Error};
+use pest::Parser;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::format_ident;
 use quote::quote;
-use regex::Regex;
 use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::parse_macro_input;
@@ -14,30 +16,53 @@ use syn::punctuated::Punctuated;
 #[allow(dead_code, clippy::type_complexity)]
 mod opcodes;
 
+mod asm_parser {
+    #[derive(Parser)]
+    #[grammar = "asm.pest"]
+    pub(crate) struct AsmParser;
+}
+use asm_parser::{AsmParser, Rule};
+
 fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
-    let inst_lower = inst.trim().to_lowercase();
-    let re_inst = Regex::new(r"(?P<name>\S+)\s+(?P<args>.+)").unwrap();
-    let re_args = Regex::new(r"\(?(?P<arg>\w+)\)?,?\s*").unwrap();
-    let caps = if let Some(caps) = re_inst.captures(&inst_lower) {
-        caps
+    let pairs = if let Ok(result) = AsmParser::parse(Rule::inst, inst.trim()) {
+        result
     } else {
+        let _ = AsmParser::parse(Rule::label, inst.trim())
+            .map_err(|err| anyhow!("parse asm error: {}", err))?;
         return Ok(None);
     };
-    let name = caps.name("name").unwrap().as_str();
-    let args = caps.name("args").unwrap().as_str().trim();
-    let args_vec = re_args
-        .captures_iter(args)
-        .map(|caps| caps["arg"].to_owned())
-        .collect::<Vec<_>>();
-    if args_vec.is_empty() {
-        return Ok(None);
+    let mut name = "unknown";
+    let mut args = Vec::new();
+    for pair in pairs {
+        for inner1_pair in pair.into_inner() {
+            match inner1_pair.as_rule() {
+                Rule::inst_name => {
+                    name = inner1_pair.as_str();
+                }
+                Rule::inst_arg => {
+                    for inner2_pair in inner1_pair.into_inner() {
+                        match inner2_pair.as_rule() {
+                            Rule::inst_arg_simple | Rule::integer => {
+                                args.push(inner2_pair.as_str());
+                            }
+                            _ => {
+                                return Ok(None);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    return Ok(None);
+                }
+            }
+        }
     }
 
     if let Some((_, base, args_cfg)) = opcodes::INSTRUCTIONS
         .iter()
         .find(|(inst_name, _, _)| *inst_name == name)
     {
-        gen_inst_code(name, &args_vec, *base, args_cfg).map(Some)
+        gen_inst_code(name, &args, *base, args_cfg).map(Some)
     } else {
         Ok(None)
     }
@@ -45,7 +70,7 @@ fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
 
 fn gen_inst_code(
     name: &str,
-    args: &[String],
+    args: &[&str],
     mut base: u32,
     arg_cfg: &[(&str, usize)],
 ) -> Result<u32, Error> {
@@ -61,8 +86,8 @@ fn gen_inst_code(
     check_args(name, args, number, has_vm)?;
     for (idx, (arg_name, arg_pos)) in arg_cfg.iter().rev().enumerate() {
         let value = match *arg_name {
-            "rs1" | "rs2" | "rd" => map_x_reg(args[idx].as_str(), arg_name)?,
-            "vs1" | "vs2" | "vs3" | "vd" => map_v_reg(args[idx].as_str(), arg_name)?,
+            "rs1" | "rs2" | "rd" => map_x_reg(args[idx], arg_name)?,
+            "vs1" | "vs2" | "vs3" | "vd" => map_v_reg(args[idx], arg_name)?,
             "simm5" => {
                 let value = args[idx]
                     .parse::<i8>()
@@ -76,7 +101,7 @@ fn gen_inst_code(
                 (value as u8 & 0b00011111) as u32
             }
             "vm" => {
-                if args.get(idx).map(|s| s.as_str()) == Some("vm") {
+                if args.get(idx) == Some(&"vm") {
                     1
                 } else {
                     0
@@ -93,7 +118,7 @@ fn gen_inst_code(
     Ok(base)
 }
 
-fn check_args(name: &str, args: &[String], number: usize, vm: bool) -> Result<(), Error> {
+fn check_args(name: &str, args: &[&str], number: usize, vm: bool) -> Result<(), Error> {
     let (expected, min, max) = if !vm {
         (number.to_string(), number, number)
     } else {
@@ -162,12 +187,12 @@ fn map_x_reg(name: &str, label: &str) -> Result<u32, Error> {
     }
 }
 
-fn rvv_asm_inner(insts: &[String], args: Option<&TokenStream2>) -> Result<TokenStream2, Error> {
+fn rvv_asm_inner(insts: &[&str], args: Option<&TokenStream2>) -> Result<TokenStream2, Error> {
     let mut insts_out = Vec::new();
     let mut inst_args_out = Vec::new();
     let mut rvv_inst_idx = 0usize;
     for inst in insts {
-        if let Some(code) = inst_code(inst.as_str())? {
+        if let Some(code) = inst_code(inst)? {
             let [b0, b1, b2, b3] = code.to_le_bytes();
             let var_b0 = format_ident!("b{}", rvv_inst_idx);
             let var_b1 = format_ident!("b{}", rvv_inst_idx + 1);
@@ -185,7 +210,7 @@ fn rvv_asm_inner(insts: &[String], args: Option<&TokenStream2>) -> Result<TokenS
                 #var_b3 = const #b3,
             });
         } else {
-            insts_out.push(inst.clone());
+            insts_out.push(inst.to_string());
         }
     }
     let rest_args = if let Some(args) = args {
@@ -250,7 +275,8 @@ pub fn rvv_asm(item: TokenStream) -> TokenStream {
             }
         }
     }
-    TokenStream::from(rvv_asm_inner(&insts, args.as_ref()).unwrap())
+    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref()).unwrap())
 }
 
 #[cfg(test)]
@@ -271,9 +297,7 @@ mod tests {
             Some(0b10000001111110011111001011010111)
         );
         assert_eq!(
-            rvv_asm_inner(&[inst.to_string()], None)
-                .unwrap()
-                .to_string(),
+            rvv_asm_inner(&[inst], None).unwrap().to_string(),
             expected_output.to_string()
         );
     }
@@ -287,7 +311,7 @@ mod tests {
             );
         };
         assert_eq!(
-            rvv_asm_inner(&["vle128.v v3, (a0), vm".to_string()], None)
+            rvv_asm_inner(&["vle128.v v3, (a0), vm"], None)
                 .unwrap()
                 .to_string(),
             expected_output.to_string()
@@ -307,7 +331,7 @@ mod tests {
             );
         };
         assert_eq!(
-            rvv_asm_inner(&["vse1024.v v3, (a0)".to_string()], None)
+            rvv_asm_inner(&["vse1024.v v3, (a0)"], None)
                 .unwrap()
                 .to_string(),
             expected_output.to_string()

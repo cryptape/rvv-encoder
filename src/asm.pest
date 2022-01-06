@@ -1,0 +1,17 @@
+
+asm = { label | inst }
+label = { ASCII_DIGIT+ ~ ":" }
+inst = { inst_name ~ inst_args }
+inst_name = @{ inst_name_part ~ ("." ~ inst_name_part )? }
+inst_name_part = @{ ASCII_ALPHA_LOWER+ ~ ASCII_DIGIT* ~ ASCII_ALPHA_LOWER* }
+inst_args = _{ inst_arg ~ ("," ~ inst_arg)* }
+inst_arg = { inst_arg_simple | inst_arg_pair | integer | inst_arg_variable }
+inst_arg_variable = { "{" ~ inst_arg_simple ~ "}" }
+inst_arg_simple = @{ ASCII_ALPHA_LOWER+ ~ ASCII_DIGIT?  }
+inst_arg_pair = _{ "(" ~ inst_arg_simple ~ ")" }
+
+integer = @{ ("+" | "-")? ~ int }
+int     = @{ "0" | (ASCII_NONZERO_DIGIT ~ digits?) }
+digits  = @{ (ASCII_DIGIT | ("_" ~ ASCII_DIGIT))+ }
+
+WHITESPACE = _{ " " | "\t" | NEWLINE }
