@@ -23,6 +23,98 @@ mod asm_parser {
 }
 use asm_parser::{AsmParser, Rule};
 
+#[proc_macro]
+pub fn rvv_asm(item: TokenStream) -> TokenStream {
+    let items = parse_macro_input!(item as Items);
+    let mut insts = Vec::new();
+    let mut args: Option<TokenStream2> = None;
+    for item in items.inner {
+        match item {
+            Item::LitStr(inst) => insts.push(inst.value()),
+            Item::Args(tokens) => {
+                if args.is_some() {
+                    panic!("Args between string literal is not allowed");
+                }
+                args = Some(tokens);
+            }
+        }
+    }
+    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref()).unwrap())
+}
+
+fn rvv_asm_inner(insts: &[&str], args: Option<&TokenStream2>) -> Result<TokenStream2, Error> {
+    let mut insts_out = Vec::new();
+    let mut inst_args_out = Vec::new();
+    let mut rvv_inst_idx = 0usize;
+    for inst in insts {
+        if let Some(code) = inst_code(inst)? {
+            let [b0, b1, b2, b3] = code.to_le_bytes();
+            let var_b0 = format_ident!("b{}", rvv_inst_idx);
+            let var_b1 = format_ident!("b{}", rvv_inst_idx + 1);
+            let var_b2 = format_ident!("b{}", rvv_inst_idx + 2);
+            let var_b3 = format_ident!("b{}", rvv_inst_idx + 3);
+            rvv_inst_idx += 4;
+            insts_out.push(format!(
+                ".byte {{{}}}, {{{}}}, {{{}}}, {{{}}}",
+                var_b0, var_b1, var_b2, var_b3
+            ));
+            inst_args_out.push(quote! {
+                #var_b0 = const #b0,
+                #var_b1 = const #b1,
+                #var_b2 = const #b2,
+                #var_b3 = const #b3,
+            });
+        } else {
+            insts_out.push(inst.to_string());
+        }
+    }
+    let rest_args = if let Some(args) = args {
+        args.clone()
+    } else {
+        TokenStream2::new()
+    };
+    // println!("insts_out: {:#?}", insts_out);
+    // println!("inst_args_out: {:#?}", inst_args_out);
+    // println!("rest_args: {:#?}", rest_args);
+    Ok(quote! {
+        asm!(
+            #(
+                #insts_out,
+            )*
+            #rest_args
+            #(#inst_args_out)*
+        );
+    })
+}
+
+#[derive(Debug)]
+enum Item {
+    LitStr(syn::LitStr),
+    Args(TokenStream2),
+}
+#[derive(Debug)]
+struct Items {
+    inner: Punctuated<Item, syn::token::Comma>,
+}
+impl Parse for Items {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Items {
+            inner: input.parse_terminated(Item::parse)?,
+        })
+    }
+}
+impl Parse for Item {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::Ident::peek_any) {
+            input.parse().map(Item::Args)
+        } else {
+            input.parse().map(Item::LitStr)
+        }
+    }
+}
+
 fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
     let pairs = if let Ok(result) = AsmParser::parse(Rule::inst, inst.trim()) {
         result
@@ -63,39 +155,6 @@ fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
         .find(|(inst_name, _, _)| *inst_name == name)
         .map(|(_, base, args_cfg)| gen_inst_code(name, &args, *base, args_cfg))
         .transpose()
-}
-
-#[repr(u8)]
-enum Vlmul {
-    // LMUL=1/8
-    Mf8 = 0b101,
-    // LMUL=1/4
-    Mf4 = 0b110,
-    // LMUL=1/2
-    Mf2 = 0b111,
-    // LMUL=1
-    M1 = 0b000,
-    // LMUL=2
-    M2 = 0b001,
-    // LMUL=4
-    M4 = 0b010,
-    // LMUL=8
-    M8 = 0b011,
-}
-
-impl Vlmul {
-    fn from_str(name: &str) -> Option<Vlmul> {
-        match name {
-            "mf8" => Some(Vlmul::Mf8),
-            "mf4" => Some(Vlmul::Mf4),
-            "mf2" => Some(Vlmul::Mf2),
-            "m1" => Some(Vlmul::M1),
-            "m2" => Some(Vlmul::M2),
-            "m4" => Some(Vlmul::M4),
-            "m8" => Some(Vlmul::M8),
-            _ => None,
-        }
-    }
 }
 
 fn gen_inst_code(
@@ -213,6 +272,39 @@ fn gen_inst_code(
     Ok(base)
 }
 
+#[repr(u8)]
+enum Vlmul {
+    // LMUL=1/8
+    Mf8 = 0b101,
+    // LMUL=1/4
+    Mf4 = 0b110,
+    // LMUL=1/2
+    Mf2 = 0b111,
+    // LMUL=1
+    M1 = 0b000,
+    // LMUL=2
+    M2 = 0b001,
+    // LMUL=4
+    M4 = 0b010,
+    // LMUL=8
+    M8 = 0b011,
+}
+
+impl Vlmul {
+    fn from_str(name: &str) -> Option<Vlmul> {
+        match name {
+            "mf8" => Some(Vlmul::Mf8),
+            "mf4" => Some(Vlmul::Mf4),
+            "mf2" => Some(Vlmul::Mf2),
+            "m1" => Some(Vlmul::M1),
+            "m2" => Some(Vlmul::M2),
+            "m4" => Some(Vlmul::M4),
+            "m8" => Some(Vlmul::M8),
+            _ => None,
+        }
+    }
+}
+
 fn check_args(name: &str, args: &[&str], number: usize, vm: bool) -> Result<(), Error> {
     let (expected, min, max) = if name == "vsetvli" || name == "vsetivli" {
         ("3 <= n <=6".to_string(), 3, 6)
@@ -282,98 +374,6 @@ fn map_x_reg(name: &str, label: &str) -> Result<u32, Error> {
         "x31" | "t6" => Ok(31),
         _ => Err(anyhow!("Invalid {} X register: {}", label, name)),
     }
-}
-
-fn rvv_asm_inner(insts: &[&str], args: Option<&TokenStream2>) -> Result<TokenStream2, Error> {
-    let mut insts_out = Vec::new();
-    let mut inst_args_out = Vec::new();
-    let mut rvv_inst_idx = 0usize;
-    for inst in insts {
-        if let Some(code) = inst_code(inst)? {
-            let [b0, b1, b2, b3] = code.to_le_bytes();
-            let var_b0 = format_ident!("b{}", rvv_inst_idx);
-            let var_b1 = format_ident!("b{}", rvv_inst_idx + 1);
-            let var_b2 = format_ident!("b{}", rvv_inst_idx + 2);
-            let var_b3 = format_ident!("b{}", rvv_inst_idx + 3);
-            rvv_inst_idx += 4;
-            insts_out.push(format!(
-                ".byte {{{}}}, {{{}}}, {{{}}}, {{{}}}",
-                var_b0, var_b1, var_b2, var_b3
-            ));
-            inst_args_out.push(quote! {
-                #var_b0 = const #b0,
-                #var_b1 = const #b1,
-                #var_b2 = const #b2,
-                #var_b3 = const #b3,
-            });
-        } else {
-            insts_out.push(inst.to_string());
-        }
-    }
-    let rest_args = if let Some(args) = args {
-        args.clone()
-    } else {
-        TokenStream2::new()
-    };
-    // println!("insts_out: {:#?}", insts_out);
-    // println!("inst_args_out: {:#?}", inst_args_out);
-    // println!("rest_args: {:#?}", rest_args);
-    Ok(quote! {
-        asm!(
-            #(
-                #insts_out,
-            )*
-            #rest_args
-            #(#inst_args_out)*
-        );
-    })
-}
-
-#[derive(Debug)]
-enum Item {
-    LitStr(syn::LitStr),
-    Args(TokenStream2),
-}
-#[derive(Debug)]
-struct Items {
-    inner: Punctuated<Item, syn::token::Comma>,
-}
-impl Parse for Items {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Items {
-            inner: input.parse_terminated(Item::parse)?,
-        })
-    }
-}
-impl Parse for Item {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::Ident::peek_any) {
-            input.parse().map(Item::Args)
-        } else {
-            input.parse().map(Item::LitStr)
-        }
-    }
-}
-
-#[proc_macro]
-pub fn rvv_asm(item: TokenStream) -> TokenStream {
-    let items = parse_macro_input!(item as Items);
-    let mut insts = Vec::new();
-    let mut args: Option<TokenStream2> = None;
-    for item in items.inner {
-        match item {
-            Item::LitStr(inst) => insts.push(inst.value()),
-            Item::Args(tokens) => {
-                if args.is_some() {
-                    panic!("Args between string literal is not allowed");
-                }
-                args = Some(tokens);
-            }
-        }
-    }
-    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref()).unwrap())
 }
 
 #[cfg(test)]
