@@ -84,11 +84,15 @@ fn gen_inst_code(
     arg_cfg: &[(&str, usize)],
 ) -> Result<u32, Error> {
     // The order of `simm5` and `vs2` in opcodes-rvv is not the same with v-spec.adoc
-    let simm5_idx = arg_cfg.iter().position(|(arg_name, _)| *arg_name == "simm5");
-    let vs2_idx = arg_cfg.iter().position(|(arg_name, _)| *arg_name == "vs2");
+    let simm5_idx = arg_cfg.iter().position(|(name, _)| *name == "simm5");
+    let vs1_idx = arg_cfg.iter().position(|(name, _)| *name == "vs1");
+    let vs2_idx = arg_cfg.iter().position(|(name, _)| *name == "vs2");
     let mut arg_cfg_vec = arg_cfg.iter().collect::<Vec<_>>();
     if let (Some(simm5_idx), Some(vs2_idx)) = (simm5_idx, vs2_idx) {
         arg_cfg_vec.swap(simm5_idx, vs2_idx);
+    }
+    if let (Some(vs1_idx), Some(vs2_idx)) = (vs1_idx, vs2_idx) {
+        arg_cfg_vec.swap(vs1_idx, vs2_idx);
     }
     let arg_cfg_final = &arg_cfg_vec;
 
@@ -185,9 +189,9 @@ fn gen_inst_code(
             }
             "vm" => {
                 if args.get(idx) == Some(&"vm") {
-                    1
-                } else {
                     0
+                } else {
+                    1
                 }
             }
             // FIXME: support segment load/store
@@ -337,7 +341,7 @@ mod tests {
     fn test_vle_n_v() {
         assert_eq!(
             encode("vle64.v v3, (a0), vm", false).unwrap(),
-            Some(0b00000010000001010111000110000111)
+            Some(0b00000000000001010111000110000111)
         );
     }
 
@@ -345,7 +349,15 @@ mod tests {
     fn test_vse_n_v() {
         assert_eq!(
             encode("vse64.v v3, (a0), vm", false).unwrap(),
-            Some(0b00000010000001010111000110100111)
+            Some(0b00000000000001010111000110100111)
+        );
+    }
+
+    #[test]
+    fn test_vadd_vv() {
+        assert_eq!(
+            encode("vadd.vv v2, v0, v1", false).unwrap(),
+            Some(0b00000010000000001000000101010111)
         );
     }
 
@@ -353,11 +365,11 @@ mod tests {
     fn test_vadd_vi() {
         assert_eq!(
             encode("vadd.vi v1, v0, 3", false).unwrap(),
-            Some(0b00000000000000011011000011010111)
+            Some(0b00000010000000011011000011010111)
         );
         assert_eq!(
             encode("vadd.vi v1, v0, 1, vm", false).unwrap(),
-            Some(0b00000010000000001011000011010111)
+            Some(0b00000000000000001011000011010111)
         );
     }
 }

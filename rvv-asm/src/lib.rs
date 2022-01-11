@@ -140,7 +140,7 @@ mod tests {
                 _rvv_asm0 = const 135u8,
                 _rvv_asm1 = const 1u8,
                 _rvv_asm2 = const 5u8,
-                _rvv_asm3 = const 18u8,
+                _rvv_asm3 = const 16u8,
             );
         };
         assert_eq!(
@@ -159,7 +159,7 @@ mod tests {
                 _rvv_asm0 = const 167u8,
                 _rvv_asm1 = const 113u8,
                 _rvv_asm2 = const 5u8,
-                _rvv_asm3 = const 16u8,
+                _rvv_asm3 = const 18u8,
             );
         };
         assert_eq!(
