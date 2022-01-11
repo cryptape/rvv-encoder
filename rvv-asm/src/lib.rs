@@ -39,10 +39,10 @@ fn rvv_asm_inner(insts: &[&str], args: Option<&TokenStream2>) -> Result<TokenStr
     for inst in insts {
         if let Some(code) = inst_code(inst)? {
             let [b0, b1, b2, b3] = code.to_le_bytes();
-            let var_b0 = format_ident!("b{}", rvv_inst_idx);
-            let var_b1 = format_ident!("b{}", rvv_inst_idx + 1);
-            let var_b2 = format_ident!("b{}", rvv_inst_idx + 2);
-            let var_b3 = format_ident!("b{}", rvv_inst_idx + 3);
+            let var_b0 = format_ident!("_rvv_asm{}", rvv_inst_idx);
+            let var_b1 = format_ident!("_rvv_asm{}", rvv_inst_idx + 1);
+            let var_b2 = format_ident!("_rvv_asm{}", rvv_inst_idx + 2);
+            let var_b3 = format_ident!("_rvv_asm{}", rvv_inst_idx + 3);
             rvv_inst_idx += 4;
             insts_out.push(format!(
                 ".byte {{{}}}, {{{}}}, {{{}}}, {{{}}}",
@@ -65,9 +65,7 @@ fn rvv_asm_inner(insts: &[&str], args: Option<&TokenStream2>) -> Result<TokenStr
     };
     Ok(quote! {
         asm!(
-            #(
-                #insts_out,
-            )*
+            #(#insts_out,)*
             #rest_args
             #(#inst_args_out)*
         );
@@ -101,7 +99,6 @@ impl Parse for Item {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,12 +106,17 @@ mod tests {
     fn test_vsetvl() {
         let expected_output = quote! {
             asm!(
-                ".byte {b0}, {b1}, {b2}, {b3}",
-                b0 = const 215u8 , b1 = const 242u8 , b2 = const 249u8 , b3 = const 129u8,
+                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}",
+                _rvv_asm0 = const 215u8,
+                _rvv_asm1 = const 242u8,
+                _rvv_asm2 = const 249u8,
+                _rvv_asm3 = const 129u8,
             );
         };
         assert_eq!(
-            rvv_asm_inner(&["vsetvl x5, s3, t6"], None).unwrap().to_string(),
+            rvv_asm_inner(&["vsetvl x5, s3, t6"], None)
+                .unwrap()
+                .to_string(),
             expected_output.to_string()
         );
     }
@@ -123,8 +125,11 @@ mod tests {
     fn test_vle_n_v() {
         let expected_output = quote! {
             asm!(
-                ".byte {b0}, {b1}, {b2}, {b3}",
-                b0 = const 135u8 , b1 = const 1u8 , b2 = const 5u8 , b3 = const 18u8,
+                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}",
+                _rvv_asm0 = const 135u8,
+                _rvv_asm1 = const 1u8,
+                _rvv_asm2 = const 5u8,
+                _rvv_asm3 = const 18u8,
             );
         };
         assert_eq!(
@@ -139,14 +144,54 @@ mod tests {
     fn test_vse_n_v() {
         let expected_output = quote! {
             asm!(
-                ".byte {b0}, {b1}, {b2}, {b3}",
-                b0 = const 167u8 , b1 = const 113u8 , b2 = const 5u8 , b3 = const 16u8,
+                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}",
+                _rvv_asm0 = const 167u8,
+                _rvv_asm1 = const 113u8,
+                _rvv_asm2 = const 5u8,
+                _rvv_asm3 = const 16u8,
             );
         };
         assert_eq!(
             rvv_asm_inner(&["vse1024.v v3, (a0)"], None)
                 .unwrap()
                 .to_string(),
+            expected_output.to_string()
+        );
+    }
+
+    #[test]
+    fn test_multi_asm() {
+        let expected_output = quote! {
+            asm!(
+                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}" ,
+                "li {a}, 3",
+                "1: ",
+                "apple_pie:",
+                "li {hi}, 4",
+                a = in (reg) a ,
+                hi = out (reg) hi ,
+                _rvv_asm0 = const 215u8,
+                _rvv_asm1 = const 242u8,
+                _rvv_asm2 = const 249u8,
+                _rvv_asm3 = const 129u8,
+            );
+        };
+        assert_eq!(
+            rvv_asm_inner(
+                &[
+                    "vsetvl x5, s3, t6",
+                    "li {a}, 3",
+                    "1: ",
+                    "apple_pie:",
+                    "li {hi}, 4",
+                ],
+                Some(&quote! {
+                    a = in(reg) a,
+                    hi = out(reg) hi,
+                })
+            )
+            .unwrap()
+            .to_string(),
             expected_output.to_string()
         );
     }

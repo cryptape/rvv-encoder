@@ -1,8 +1,11 @@
+// asm = { label | inst }
 
-asm = { label | inst }
-label = { ASCII_DIGIT+ ~ ":" }
+label = @{ SOI ~ (label_ident | label_num) ~ ":" ~ EOI }
+label_ident = @{ (ASCII_ALPHA | "_")+ ~ (ASCII_ALPHANUMERIC | "_")* }
+label_num = @{ ASCII_DIGIT+ }
+
 inst = { inst_name ~ inst_args }
-inst_name = @{ inst_name_part ~ ("." ~ inst_name_part )? }
+inst_name = @{ inst_name_part ~ ("." ~ inst_name_part )* }
 inst_name_part = @{ ASCII_ALPHA_LOWER+ ~ ASCII_DIGIT* ~ ASCII_ALPHA_LOWER* }
 inst_args = _{ inst_arg ~ ("," ~ inst_arg)* }
 inst_arg = { inst_arg_simple | inst_arg_addr | integer | inst_arg_variable }
