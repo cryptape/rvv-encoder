@@ -83,17 +83,26 @@ fn gen_inst_code(
     mut base: u32,
     arg_cfg: &[(&str, usize)],
 ) -> Result<u32, Error> {
-    let has_vm = arg_cfg.iter().any(|(arg_name, _)| *arg_name == "vm");
-    let has_nf = arg_cfg.iter().any(|(arg_name, _)| *arg_name == "nf");
+    // The order of `simm5` and `vs2` in opcodes-rvv is not the same with v-spec.adoc
+    let simm5_idx = arg_cfg.iter().position(|(arg_name, _)| *arg_name == "simm5");
+    let vs2_idx = arg_cfg.iter().position(|(arg_name, _)| *arg_name == "vs2");
+    let mut arg_cfg_vec = arg_cfg.iter().collect::<Vec<_>>();
+    if let (Some(simm5_idx), Some(vs2_idx)) = (simm5_idx, vs2_idx) {
+        arg_cfg_vec.swap(simm5_idx, vs2_idx);
+    }
+    let arg_cfg_final = &arg_cfg_vec;
+
+    let has_vm = arg_cfg_final.iter().any(|(arg_name, _)| *arg_name == "vm");
+    let has_nf = arg_cfg_final.iter().any(|(arg_name, _)| *arg_name == "nf");
     let number = if has_nf && has_vm {
-        arg_cfg.len() - 2
+        arg_cfg_final.len() - 2
     } else if has_vm {
-        arg_cfg.len() - 1
+        arg_cfg_final.len() - 1
     } else {
-        arg_cfg.len()
+        arg_cfg_final.len()
     };
     check_args(name, args, number, has_vm)?;
-    for (idx, (arg_name, arg_pos)) in arg_cfg.iter().rev().enumerate() {
+    for (idx, (arg_name, arg_pos)) in arg_cfg_final.iter().rev().enumerate() {
         let value = match *arg_name {
             "rs1" | "rs2" | "rd" => map_x_reg(args[idx], arg_name)?,
             "vs1" | "vs2" | "vs3" | "vd" => map_v_reg(args[idx], arg_name)?,
@@ -337,6 +346,18 @@ mod tests {
         assert_eq!(
             encode("vse64.v v3, (a0), vm", false).unwrap(),
             Some(0b00000010000001010111000110100111)
+        );
+    }
+
+    #[test]
+    fn test_vadd_vi() {
+        assert_eq!(
+            encode("vadd.vi v1, v0, 3", false).unwrap(),
+            Some(0b00000000000000011011000011010111)
+        );
+        assert_eq!(
+            encode("vadd.vi v1, v0, 1, vm", false).unwrap(),
+            Some(0b00000010000000001011000011010111)
         );
     }
 }
