@@ -12,21 +12,16 @@ use syn::punctuated::Punctuated;
 
 #[proc_macro]
 pub fn rvv_asm(item: TokenStream) -> TokenStream {
-    let items = parse_macro_input!(item as Items);
-    let (insts, args) = parse_tokens(items);
-    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref(), false).unwrap())
+    transform(item, false)
 }
 
 #[proc_macro]
 pub fn rvv_asm_reserved_only(item: TokenStream) -> TokenStream {
-    let items = parse_macro_input!(item as Items);
-    let (insts, args) = parse_tokens(items);
-    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref(), true).unwrap())
+    transform(item, true)
 }
 
-fn parse_tokens(items: Items) -> (Vec<String>, Option<TokenStream2>) {
+fn transform(item: TokenStream, reserved_only: bool) -> TokenStream {
+    let items = parse_macro_input!(item as Items);
     let mut insts = Vec::new();
     let mut args: Option<TokenStream2> = None;
     for item in items.inner {
@@ -40,7 +35,8 @@ fn parse_tokens(items: Items) -> (Vec<String>, Option<TokenStream2>) {
             }
         }
     }
-    (insts, args)
+    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref(), reserved_only).unwrap())
 }
 
 fn rvv_asm_inner(

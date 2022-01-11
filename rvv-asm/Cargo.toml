@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 license = "MIT"
 authors = ["Linfeng Qian <thewawar@gmail.com>"]
-keywords = ["rvv", "riscv", "vector", "encode", "macro", "procedure"]
+keywords = ["rvv", "riscv", "vector", "encode", "macro"]
 description = "Procedure macro to encode riscv vector (rvv) instructions"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
