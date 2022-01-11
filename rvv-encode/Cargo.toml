@@ -6,6 +6,7 @@ license = "MIT"
 authors = ["Linfeng Qian <thewawar@gmail.com>"]
 keywords = ["rvv", "riscv", "vector", "encode"]
 description = "Library to encode riscv vector (rvv) instructions"
+repository = "https://github.com/TheWaWaR/rvv-encoder"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
