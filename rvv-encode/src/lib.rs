@@ -14,7 +14,7 @@ mod asm_parser {
 }
 use asm_parser::{AsmParser, Rule};
 
-pub fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
+pub fn encode(inst: &str, reserved_only: bool) -> Result<Option<u32>, Error> {
     let pairs = if let Ok(result) = AsmParser::parse(Rule::inst, inst.trim()) {
         result
     } else {
@@ -46,6 +46,27 @@ pub fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
                     return Ok(None);
                 }
             }
+        }
+    }
+    if reserved_only {
+        let mut is_reserved = false;
+        'outer: for width in [128, 256, 512, 1024] {
+            for prefix in ["i", "e"] {
+                let part = format!("{}{}", prefix, width);
+                if name.contains(part.as_str()) {
+                    is_reserved = true;
+                    break 'outer;
+                }
+                for arg in &args {
+                    if arg.contains(part.as_str()) {
+                        is_reserved = true;
+                        break 'outer;
+                    }
+                }
+            }
+        }
+        if !is_reserved {
+            return Ok(None);
         }
     }
 
@@ -282,23 +303,23 @@ mod tests {
     #[test]
     fn test_vsetvl() {
         assert_eq!(
-            inst_code("vsetvl x5, s3, t6").unwrap(),
+            encode("vsetvl x5, s3, t6", false).unwrap(),
             Some(0b10000001111110011111001011010111)
         );
         assert_eq!(
-            inst_code("vsetvli x5, s3, e8").unwrap(),
+            encode("vsetvli x5, s3, e8", false).unwrap(),
             Some(0b00000000000010011111001011010111)
         );
         assert_eq!(
-            inst_code("vsetvli x5, s3, e256, m4").unwrap(),
+            encode("vsetvli x5, s3, e256, m4", false).unwrap(),
             Some(0b00000010101010011111001011010111)
         );
         assert_eq!(
-            inst_code("vsetvli x5, s3, e256, m4, ta, ma").unwrap(),
+            encode("vsetvli x5, s3, e256, m4, ta, ma", false).unwrap(),
             Some(0b00001110101010011111001011010111)
         );
         assert_eq!(
-            inst_code("vsetivli x5, 19, e256, m4").unwrap(),
+            encode("vsetivli x5, 19, e256, m4", false).unwrap(),
             Some(0b11000010101010011111001011010111)
         );
     }
@@ -306,7 +327,7 @@ mod tests {
     #[test]
     fn test_vle_n_v() {
         assert_eq!(
-            inst_code("vle64.v v3, (a0), vm").unwrap(),
+            encode("vle64.v v3, (a0), vm", false).unwrap(),
             Some(0b00000010000001010111000110000111)
         );
     }
@@ -314,7 +335,7 @@ mod tests {
     #[test]
     fn test_vse_n_v() {
         assert_eq!(
-            inst_code("vse64.v v3, (a0), vm").unwrap(),
+            encode("vse64.v v3, (a0), vm", false).unwrap(),
             Some(0b00000010000001010111000110100111)
         );
     }

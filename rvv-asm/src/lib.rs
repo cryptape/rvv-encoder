@@ -10,11 +10,23 @@ use syn::parse::{Parse, ParseStream};
 use syn::parse_macro_input;
 use syn::punctuated::Punctuated;
 
-use rvv_encode::inst_code;
-
 #[proc_macro]
 pub fn rvv_asm(item: TokenStream) -> TokenStream {
     let items = parse_macro_input!(item as Items);
+    let (insts, args) = parse_tokens(items);
+    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref(), false).unwrap())
+}
+
+#[proc_macro]
+pub fn rvv_asm_reserved_only(item: TokenStream) -> TokenStream {
+    let items = parse_macro_input!(item as Items);
+    let (insts, args) = parse_tokens(items);
+    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref(), true).unwrap())
+}
+
+fn parse_tokens(items: Items) -> (Vec<String>, Option<TokenStream2>) {
     let mut insts = Vec::new();
     let mut args: Option<TokenStream2> = None;
     for item in items.inner {
@@ -28,16 +40,19 @@ pub fn rvv_asm(item: TokenStream) -> TokenStream {
             }
         }
     }
-    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref()).unwrap())
+    (insts, args)
 }
 
-fn rvv_asm_inner(insts: &[&str], args: Option<&TokenStream2>) -> Result<TokenStream2, Error> {
+fn rvv_asm_inner(
+    insts: &[&str],
+    args: Option<&TokenStream2>,
+    reserved_only: bool,
+) -> Result<TokenStream2, Error> {
     let mut insts_out = Vec::new();
     let mut inst_args_out = Vec::new();
     let mut rvv_inst_idx = 0usize;
     for inst in insts {
-        if let Some(code) = inst_code(inst)? {
+        if let Some(code) = rvv_encode::encode(inst, reserved_only)? {
             let [b0, b1, b2, b3] = code.to_le_bytes();
             let var_b0 = format_ident!("_rvv_asm{}", rvv_inst_idx);
             let var_b1 = format_ident!("_rvv_asm{}", rvv_inst_idx + 1);
@@ -114,7 +129,7 @@ mod tests {
             );
         };
         assert_eq!(
-            rvv_asm_inner(&["vsetvl x5, s3, t6"], None)
+            rvv_asm_inner(&["vsetvl x5, s3, t6"], None, false)
                 .unwrap()
                 .to_string(),
             expected_output.to_string()
@@ -133,7 +148,7 @@ mod tests {
             );
         };
         assert_eq!(
-            rvv_asm_inner(&["vle128.v v3, (a0), vm"], None)
+            rvv_asm_inner(&["vle128.v v3, (a0), vm"], None, false)
                 .unwrap()
                 .to_string(),
             expected_output.to_string()
@@ -152,7 +167,7 @@ mod tests {
             );
         };
         assert_eq!(
-            rvv_asm_inner(&["vse1024.v v3, (a0)"], None)
+            rvv_asm_inner(&["vse1024.v v3, (a0)"], None, false)
                 .unwrap()
                 .to_string(),
             expected_output.to_string()
@@ -188,7 +203,8 @@ mod tests {
                 Some(&quote! {
                     a = in(reg) a,
                     hi = out(reg) hi,
-                })
+                }),
+                false,
             )
             .unwrap()
             .to_string(),

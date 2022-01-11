@@ -18,3 +18,4 @@ int     = @{ "0" | (ASCII_NONZERO_DIGIT ~ digits?) }
 digits  = @{ (ASCII_DIGIT | ("_" ~ ASCII_DIGIT))+ }
 
 WHITESPACE = _{ " " | "\t" | NEWLINE }
+COMMENT    = _{ ";" ~ (!NEWLINE ~ ANY)* }
