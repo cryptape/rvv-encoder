@@ -1,0 +1,18 @@
+[package]
+name = "rvv-asm"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+anyhow = "1.0.44"
+quote = "1.0.9"
+proc-macro2 = { version = "1.0", features = ["span-locations"] }
+syn = { version = "1.0.80", features = ["extra-traits", "full", "fold", "printing"] }
+rvv-encode = { version = "0.1.0", path = "../rvv-encode" }
+
+[dev-dependencies]

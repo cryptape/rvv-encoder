@@ -1,17 +1,8 @@
-extern crate proc_macro;
 #[macro_use]
 extern crate pest_derive;
 
 use anyhow::{anyhow, Error};
 use pest::Parser;
-use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::format_ident;
-use quote::quote;
-use syn::ext::IdentExt;
-use syn::parse::{Parse, ParseStream};
-use syn::parse_macro_input;
-use syn::punctuated::Punctuated;
 
 #[allow(dead_code, clippy::type_complexity)]
 mod opcodes;
@@ -23,99 +14,7 @@ mod asm_parser {
 }
 use asm_parser::{AsmParser, Rule};
 
-#[proc_macro]
-pub fn rvv_asm(item: TokenStream) -> TokenStream {
-    let items = parse_macro_input!(item as Items);
-    let mut insts = Vec::new();
-    let mut args: Option<TokenStream2> = None;
-    for item in items.inner {
-        match item {
-            Item::LitStr(inst) => insts.push(inst.value()),
-            Item::Args(tokens) => {
-                if args.is_some() {
-                    panic!("Args between string literal is not allowed");
-                }
-                args = Some(tokens);
-            }
-        }
-    }
-    let insts_str = insts.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-    TokenStream::from(rvv_asm_inner(&insts_str, args.as_ref()).unwrap())
-}
-
-fn rvv_asm_inner(insts: &[&str], args: Option<&TokenStream2>) -> Result<TokenStream2, Error> {
-    let mut insts_out = Vec::new();
-    let mut inst_args_out = Vec::new();
-    let mut rvv_inst_idx = 0usize;
-    for inst in insts {
-        if let Some(code) = inst_code(inst)? {
-            let [b0, b1, b2, b3] = code.to_le_bytes();
-            let var_b0 = format_ident!("b{}", rvv_inst_idx);
-            let var_b1 = format_ident!("b{}", rvv_inst_idx + 1);
-            let var_b2 = format_ident!("b{}", rvv_inst_idx + 2);
-            let var_b3 = format_ident!("b{}", rvv_inst_idx + 3);
-            rvv_inst_idx += 4;
-            insts_out.push(format!(
-                ".byte {{{}}}, {{{}}}, {{{}}}, {{{}}}",
-                var_b0, var_b1, var_b2, var_b3
-            ));
-            inst_args_out.push(quote! {
-                #var_b0 = const #b0,
-                #var_b1 = const #b1,
-                #var_b2 = const #b2,
-                #var_b3 = const #b3,
-            });
-        } else {
-            insts_out.push(inst.to_string());
-        }
-    }
-    let rest_args = if let Some(args) = args {
-        args.clone()
-    } else {
-        TokenStream2::new()
-    };
-    // println!("insts_out: {:#?}", insts_out);
-    // println!("inst_args_out: {:#?}", inst_args_out);
-    // println!("rest_args: {:#?}", rest_args);
-    Ok(quote! {
-        asm!(
-            #(
-                #insts_out,
-            )*
-            #rest_args
-            #(#inst_args_out)*
-        );
-    })
-}
-
-#[derive(Debug)]
-enum Item {
-    LitStr(syn::LitStr),
-    Args(TokenStream2),
-}
-#[derive(Debug)]
-struct Items {
-    inner: Punctuated<Item, syn::token::Comma>,
-}
-impl Parse for Items {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Items {
-            inner: input.parse_terminated(Item::parse)?,
-        })
-    }
-}
-impl Parse for Item {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::Ident::peek_any) {
-            input.parse().map(Item::Args)
-        } else {
-            input.parse().map(Item::LitStr)
-        }
-    }
-}
-
-fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
+pub fn inst_code(inst: &str) -> Result<Option<u32>, Error> {
     let pairs = if let Ok(result) = AsmParser::parse(Rule::inst, inst.trim()) {
         result
     } else {
@@ -382,20 +281,9 @@ mod tests {
 
     #[test]
     fn test_vsetvl() {
-        let expected_output = quote! {
-            asm!(
-                ".byte {b0}, {b1}, {b2}, {b3}",
-                b0 = const 215u8 , b1 = const 242u8 , b2 = const 249u8 , b3 = const 129u8,
-            );
-        };
-        let inst = "vsetvl x5, s3, t6";
         assert_eq!(
-            inst_code(inst).unwrap(),
+            inst_code("vsetvl x5, s3, t6").unwrap(),
             Some(0b10000001111110011111001011010111)
-        );
-        assert_eq!(
-            rvv_asm_inner(&[inst], None).unwrap().to_string(),
-            expected_output.to_string()
         );
         assert_eq!(
             inst_code("vsetvli x5, s3, e8").unwrap(),
@@ -417,18 +305,6 @@ mod tests {
 
     #[test]
     fn test_vle_n_v() {
-        let expected_output = quote! {
-            asm!(
-                ".byte {b0}, {b1}, {b2}, {b3}",
-                b0 = const 135u8 , b1 = const 1u8 , b2 = const 5u8 , b3 = const 18u8,
-            );
-        };
-        assert_eq!(
-            rvv_asm_inner(&["vle128.v v3, (a0), vm"], None)
-                .unwrap()
-                .to_string(),
-            expected_output.to_string()
-        );
         assert_eq!(
             inst_code("vle64.v v3, (a0), vm").unwrap(),
             Some(0b00000010000001010111000110000111)
@@ -437,18 +313,6 @@ mod tests {
 
     #[test]
     fn test_vse_n_v() {
-        let expected_output = quote! {
-            asm!(
-                ".byte {b0}, {b1}, {b2}, {b3}",
-                b0 = const 167u8 , b1 = const 113u8 , b2 = const 5u8 , b3 = const 16u8,
-            );
-        };
-        assert_eq!(
-            rvv_asm_inner(&["vse1024.v v3, (a0)"], None)
-                .unwrap()
-                .to_string(),
-            expected_output.to_string()
-        );
         assert_eq!(
             inst_code("vse64.v v3, (a0), vm").unwrap(),
             Some(0b00000010000001010111000110100111)

@@ -1,7 +1,7 @@
 #![feature(asm)]
 #![feature(asm_const)]
 
-use rvv_encoder::rvv_asm;
+use rvv_asm::rvv_asm;
 
 fn main() {
     let a: u64 = 3;
