@@ -43,23 +43,19 @@ fn rvv_asm_inner(
     args: Option<&TokenStream2>,
     reserved_only: bool,
 ) -> Result<TokenStream2, Error> {
-    let mut insts_out = Vec::new();
-    for inst in insts {
-        if let Some(code) = rvv_encode::encode(inst, reserved_only)? {
-            let [b0, b1, b2, b3] = code.to_le_bytes();
-            insts_out.push(format!(
-                ".byte {:#04x}, {:#04x}, {:#04x}, {:#04x}",
-                b0, b1, b2, b3
-            ));
-        } else {
-            insts_out.push(inst.to_string());
-        }
-    }
-    let rest_args = if let Some(args) = args {
-        args.clone()
-    } else {
-        TokenStream2::new()
-    };
+    let insts_out = insts
+        .iter()
+        .map(|inst| {
+            let out = rvv_encode::encode(inst, reserved_only)?
+                .map(|code| {
+                    let [b0, b1, b2, b3] = code.to_le_bytes();
+                    format!(".byte {:#04x}, {:#04x}, {:#04x}, {:#04x}", b0, b1, b2, b3)
+                })
+                .unwrap_or_else(|| inst.to_string());
+            Ok(out)
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let rest_args = args.cloned().unwrap_or_else(TokenStream2::new);
     Ok(quote! {
         asm!(
             #(#insts_out,)*
