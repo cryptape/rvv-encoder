@@ -3,7 +3,6 @@ extern crate proc_macro;
 use anyhow::Error;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::format_ident;
 use quote::quote;
 use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
@@ -45,26 +44,13 @@ fn rvv_asm_inner(
     reserved_only: bool,
 ) -> Result<TokenStream2, Error> {
     let mut insts_out = Vec::new();
-    let mut inst_args_out = Vec::new();
-    let mut rvv_inst_idx = 0usize;
     for inst in insts {
         if let Some(code) = rvv_encode::encode(inst, reserved_only)? {
             let [b0, b1, b2, b3] = code.to_le_bytes();
-            let var_b0 = format_ident!("_rvv_asm{}", rvv_inst_idx);
-            let var_b1 = format_ident!("_rvv_asm{}", rvv_inst_idx + 1);
-            let var_b2 = format_ident!("_rvv_asm{}", rvv_inst_idx + 2);
-            let var_b3 = format_ident!("_rvv_asm{}", rvv_inst_idx + 3);
-            rvv_inst_idx += 4;
             insts_out.push(format!(
-                ".byte {{{}}}, {{{}}}, {{{}}}, {{{}}}",
-                var_b0, var_b1, var_b2, var_b3
+                ".byte {:#04x}, {:#04x}, {:#04x}, {:#04x}",
+                b0, b1, b2, b3
             ));
-            inst_args_out.push(quote! {
-                #var_b0 = const #b0,
-                #var_b1 = const #b1,
-                #var_b2 = const #b2,
-                #var_b3 = const #b3,
-            });
         } else {
             insts_out.push(inst.to_string());
         }
@@ -78,7 +64,6 @@ fn rvv_asm_inner(
         asm!(
             #(#insts_out,)*
             #rest_args
-            #(#inst_args_out)*
         );
     })
 }
@@ -115,58 +100,31 @@ mod tests {
     use super::*;
     #[test]
     fn test_vsetvl() {
-        let expected_output = quote! {
-            asm!(
-                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}",
-                _rvv_asm0 = const 215u8,
-                _rvv_asm1 = const 242u8,
-                _rvv_asm2 = const 249u8,
-                _rvv_asm3 = const 129u8,
-            );
-        };
         assert_eq!(
             rvv_asm_inner(&["vsetvl x5, s3, t6"], None, false)
                 .unwrap()
                 .to_string(),
-            expected_output.to_string()
+            quote!(asm!(".byte 0xd7, 0xf2, 0xf9, 0x81",);).to_string()
         );
     }
 
     #[test]
     fn test_vle_n_v() {
-        let expected_output = quote! {
-            asm!(
-                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}",
-                _rvv_asm0 = const 135u8,
-                _rvv_asm1 = const 1u8,
-                _rvv_asm2 = const 5u8,
-                _rvv_asm3 = const 16u8,
-            );
-        };
         assert_eq!(
             rvv_asm_inner(&["vle128.v v3, (a0), vm"], None, false)
                 .unwrap()
                 .to_string(),
-            expected_output.to_string()
+            quote!(asm!(".byte 0x87, 0x01, 0x05, 0x10",);).to_string()
         );
     }
 
     #[test]
     fn test_vse_n_v() {
-        let expected_output = quote! {
-            asm!(
-                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}",
-                _rvv_asm0 = const 167u8,
-                _rvv_asm1 = const 113u8,
-                _rvv_asm2 = const 5u8,
-                _rvv_asm3 = const 18u8,
-            );
-        };
         assert_eq!(
             rvv_asm_inner(&["vse1024.v v3, (a0)"], None, false)
                 .unwrap()
                 .to_string(),
-            expected_output.to_string()
+            quote!(asm!(".byte 0xa7, 0x71, 0x05, 0x12",);).to_string()
         );
     }
 
@@ -174,17 +132,13 @@ mod tests {
     fn test_multi_asm() {
         let expected_output = quote! {
             asm!(
-                ".byte {_rvv_asm0}, {_rvv_asm1}, {_rvv_asm2}, {_rvv_asm3}" ,
+                ".byte 0xd7, 0xf2, 0xf9, 0x81",
                 "li {a}, 3",
                 "1: ",
                 "apple_pie:",
                 "li {hi}, 4",
                 a = in (reg) a ,
                 hi = out (reg) hi ,
-                _rvv_asm0 = const 215u8,
-                _rvv_asm1 = const 242u8,
-                _rvv_asm2 = const 249u8,
-                _rvv_asm3 = const 129u8,
             );
         };
         assert_eq!(
