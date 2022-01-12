@@ -83,7 +83,7 @@ fn gen_inst_code(
     mut base: u32,
     arg_cfg: &[(&str, usize)],
 ) -> Result<u32, Error> {
-    // The order of `simm5` and `vs2` in opcodes-rvv is not the same with v-spec.adoc
+    // The order of `simm5`/`vs1` and `vs2` in opcodes-rvv is not the same with v-spec.adoc
     let simm5_idx = arg_cfg.iter().position(|(name, _)| *name == "simm5");
     let vs1_idx = arg_cfg.iter().position(|(name, _)| *name == "vs1");
     let vs2_idx = arg_cfg.iter().position(|(name, _)| *name == "vs2");
