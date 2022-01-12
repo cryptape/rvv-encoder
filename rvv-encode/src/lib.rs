@@ -314,62 +314,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_vsetvl() {
-        assert_eq!(
-            encode("vsetvl x5, s3, t6", false).unwrap(),
-            Some(0b10000001111110011111001011010111)
-        );
-        assert_eq!(
-            encode("vsetvli x5, s3, e8", false).unwrap(),
-            Some(0b00000000000010011111001011010111)
-        );
-        assert_eq!(
-            encode("vsetvli x5, s3, e256, m4", false).unwrap(),
-            Some(0b00000010101010011111001011010111)
-        );
-        assert_eq!(
-            encode("vsetvli x5, s3, e256, m4, ta, ma", false).unwrap(),
-            Some(0b00001110101010011111001011010111)
-        );
-        assert_eq!(
-            encode("vsetivli x5, 19, e256, m4", false).unwrap(),
-            Some(0b11000010101010011111001011010111)
-        );
-    }
-
-    #[test]
-    fn test_vle_n_v() {
-        assert_eq!(
-            encode("vle64.v v3, (a0), vm", false).unwrap(),
-            Some(0b00000000000001010111000110000111)
-        );
-    }
-
-    #[test]
-    fn test_vse_n_v() {
-        assert_eq!(
-            encode("vse64.v v3, (a0), vm", false).unwrap(),
-            Some(0b00000000000001010111000110100111)
-        );
-    }
-
-    #[test]
-    fn test_vadd_vv() {
-        assert_eq!(
-            encode("vadd.vv v2, v0, v1", false).unwrap(),
-            Some(0b00000010000000001000000101010111)
-        );
-    }
-
-    #[test]
-    fn test_vadd_vi() {
-        assert_eq!(
-            encode("vadd.vi v1, v0, 3", false).unwrap(),
-            Some(0b00000010000000011011000011010111)
-        );
-        assert_eq!(
-            encode("vadd.vi v1, v0, 1, vm", false).unwrap(),
-            Some(0b00000000000000001011000011010111)
-        );
+    fn test_insts() {
+        #[allow(clippy::deprecated_cfg_attr)]
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        for (code, inst) in [
+            (0b10000001111110011111001011010111, "vsetvl x5, s3, t6"),
+            (0b00000000000010011111001011010111, "vsetvli x5, s3, e8"),
+            (0b00000010101010011111001011010111, "vsetvli x5, s3, e256, m4"),
+            (0b00001110101010011111001011010111, "vsetvli x5, s3, e256, m4, ta, ma"),
+            (0b11000010101010011111001011010111, "vsetivli x5, 19, e256, m4"),
+            (0b00000000000001010111000110000111, "vle64.v v3, (a0), vm"),
+            (0b00000000000001010111000110100111, "vse64.v v3, (a0), vm"),
+            (0b00000010000000001000000101010111, "vadd.vv v2, v0, v1"),
+            (0b00000010000000011011000011010111, "vadd.vi v1, v0, 3"),
+            (0b00000000000000001011000011010111, "vadd.vi v1, v0, 1, vm"),
+        ] {
+            assert_eq!(encode(inst, false).unwrap(), Some(code));
+        }
     }
 }
