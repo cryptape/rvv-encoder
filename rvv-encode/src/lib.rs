@@ -14,6 +14,12 @@ mod asm_parser {
 }
 use asm_parser::{AsmParser, Rule};
 
+/// Convert one RISC-V Vector Extension(RVV) instruction into code.
+///
+/// This function try to parse the instruction as normal asm instruction or
+/// standalone label ("1:"/"label:"). If it's a valid RVV instruction, it will
+/// try to encode it to target code. Otherwise, if it's a valid asm instruction
+/// it will return `Ok(None)`. If parse or encode failed, it will return error.
 pub fn encode(inst: &str, reserved_only: bool) -> Result<Option<u32>, Error> {
     let pairs = if let Ok(result) = AsmParser::parse(Rule::inst, inst.trim()) {
         result

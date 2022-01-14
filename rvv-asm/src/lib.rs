@@ -9,11 +9,13 @@ use syn::parse::{Parse, ParseStream};
 use syn::parse_macro_input;
 use syn::punctuated::Punctuated;
 
+/// Convert RISC-V Vector Extension to `.byte 0x00, 0x11, 0xaa, 0xbb` format asm instructions.
 #[proc_macro]
 pub fn rvv_asm(item: TokenStream) -> TokenStream {
     transform(item, false)
 }
 
+/// Convert **reserved only** RISC-V Vector Extension to `.byte 0x00, 0x11, 0xaa, 0xbb` format asm instructions.
 #[proc_macro]
 pub fn rvv_asm_reserved_only(item: TokenStream) -> TokenStream {
     transform(item, true)
