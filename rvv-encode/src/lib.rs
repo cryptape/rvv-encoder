@@ -24,7 +24,7 @@ pub fn encode(inst: &str, reserved_only: bool) -> Result<Option<u32>, Error> {
     };
     let mut name = "unknown";
     let mut args = Vec::new();
-    for pair in pairs {
+    for pair in pairs.clone() {
         for inner1_pair in pair.into_inner() {
             match inner1_pair.as_rule() {
                 Rule::inst_name => {
@@ -33,7 +33,7 @@ pub fn encode(inst: &str, reserved_only: bool) -> Result<Option<u32>, Error> {
                 Rule::inst_arg => {
                     for inner2_pair in inner1_pair.into_inner() {
                         match inner2_pair.as_rule() {
-                            Rule::inst_arg_simple | Rule::integer => {
+                            Rule::inst_arg_mask | Rule::inst_arg_simple | Rule::integer => {
                                 args.push(inner2_pair.as_str());
                             }
                             _ => {
@@ -187,8 +187,10 @@ fn gen_inst_code(
                 }
                 value as u32
             }
+            // See comment in asm.pest
             "vm" => {
-                if args.get(idx) == Some(&"vm") {
+                println!("args: {:?}", &args);
+                if args.get(idx) == Some(&"v0.t") {
                     0
                 } else {
                     1
@@ -323,13 +325,13 @@ mod tests {
             (0b00000010101010011111001011010111, "vsetvli x5, s3, e256, m4"),
             (0b00001110101010011111001011010111, "vsetvli x5, s3, e256, m4, ta, ma"),
             (0b11000010101010011111001011010111, "vsetivli x5, 19, e256, m4"),
-            (0b00000000000001010111000110000111, "vle64.v v3, (a0), vm"),
-            (0b00000000000001010111000110100111, "vse64.v v3, (a0), vm"),
+            (0b00000000000001010111000110000111, "vle64.v v3, (a0), v0.t"),
+            (0b00000000000001010111000110100111, "vse64.v v3, (a0), v0.t"),
             (0b00000010000000001000000101010111, "vadd.vv v2, v0, v1"),
             (0b00000010000000011011000011010111, "vadd.vi v1, v0, 3"),
-            (0b00000000000000001011000011010111, "vadd.vi v1, v0, 1, vm"),
+            (0b00000000000000001011000011010111, "vadd.vi v1, v0, 1, v0.t"),
         ] {
-            assert_eq!(encode(inst, false).unwrap(), Some(code));
+            assert_eq!(encode(inst, false).unwrap(), Some(code), "{}", inst);
         }
     }
 }
