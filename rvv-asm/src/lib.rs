@@ -25,7 +25,9 @@ fn transform(item: TokenStream, reserved_only: bool) -> TokenStream {
     let mut args: Option<TokenStream2> = None;
     for item in items.inner {
         match item {
-            Item::LitStr(inst) => insts.push(inst.value()),
+            Item::LitStr(inst) => {
+                insts.extend(inst.value().split('\n').map(|s| s.to_string()))
+            },
             Item::Args(tokens) => {
                 if args.is_some() {
                     panic!("Args between string literal is not allowed");

@@ -21,4 +21,11 @@ fn main() {
             hi = out(reg) hi,
         );
     }
+
+    unsafe {
+        rvv_asm!(
+            "vsetvl x5, s3, t6 \n mov {0}, 3",
+            in(reg) a,
+        );
+    }
 }
