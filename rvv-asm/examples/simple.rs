@@ -22,6 +22,17 @@ fn main() {
         );
     }
 
+    // inline label
+    unsafe {
+        rvv_asm!(
+            "vsetvl x5, s3, t6",
+            "1: vle256.v v3, (a0), vm",
+            "2: mov {lo}, 4",
+            lo = out(reg) lo,
+        );
+    }
+
+    // multiple line asm string literal
     unsafe {
         rvv_asm!(
             "vsetvl x5, s3, t6 \n mov {0}, 3",

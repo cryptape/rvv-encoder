@@ -25,9 +25,12 @@ fn transform(item: TokenStream, reserved_only: bool) -> TokenStream {
     let mut args: Option<TokenStream2> = None;
     for item in items.inner {
         match item {
-            Item::LitStr(inst) => {
-                insts.extend(inst.value().split('\n').map(|s| s.to_string()))
-            },
+            Item::LitStr(content) => {
+                for part in content.value().split('\n') {
+                    // For support inline label
+                    insts.extend(part.split_inclusive(':').map(|s| s.to_string()));
+                }
+            }
             Item::Args(tokens) => {
                 if args.is_some() {
                     panic!("Args between string literal is not allowed");
@@ -165,8 +168,8 @@ mod tests {
         let expected_output = quote! {
             asm!(
                 ".byte 0xd7, 0xf2, 0xf9, 0x81",
-                "li {a}, 3",
                 "1: ",
+                "li {a}, 3",
                 "apple_pie:",
                 "li {hi}, 4",
                 a = in (reg) a ,
@@ -177,8 +180,8 @@ mod tests {
             rvv_asm_inner(
                 &[
                     "vsetvl x5, s3, t6",
-                    "li {a}, 3",
                     "1: ",
+                    "li {a}, 3",
                     "apple_pie:",
                     "li {hi}, 4",
                 ],
@@ -188,8 +191,8 @@ mod tests {
                 }),
                 false,
             )
-                .unwrap()
-                .to_string(),
+            .unwrap()
+            .to_string(),
             expected_output.to_string()
         );
     }
