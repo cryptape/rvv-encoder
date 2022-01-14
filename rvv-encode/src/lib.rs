@@ -195,7 +195,6 @@ fn gen_inst_code(
             }
             // See comment in asm.pest
             "vm" => {
-                println!("args: {:?}", &args);
                 if args.get(idx) == Some(&"v0.t") {
                     0
                 } else {
