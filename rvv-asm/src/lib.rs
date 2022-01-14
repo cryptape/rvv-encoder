@@ -10,6 +10,21 @@ use syn::parse_macro_input;
 use syn::punctuated::Punctuated;
 
 /// Convert RISC-V Vector Extension to `.byte 0x00, 0x11, 0xaa, 0xbb` format asm instructions.
+///
+/// ## Example:
+/// Compile will fail due to target not supported on develop/CI machine.
+/// ```compile_fail
+/// let lo: i64;
+/// unsafe {
+///     rvv_asm::rvv_asm!(
+///         "vsetvl x5, s3, t6",
+///         "1: vle256.v v3, (a0), vm",
+///         "2:",
+///         "li {lo}, 4",
+///         lo = out(reg) lo,
+///     );
+/// }
+/// ```
 #[proc_macro]
 pub fn rvv_asm(item: TokenStream) -> TokenStream {
     transform(item, false)

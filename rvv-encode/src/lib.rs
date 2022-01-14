@@ -20,6 +20,11 @@ use asm_parser::{AsmParser, Rule};
 /// standalone label ("1:"/"label:"). If it's a valid RVV instruction, it will
 /// try to encode it to target code. Otherwise, if it's a valid asm instruction
 /// it will return `Ok(None)`. If parse or encode failed, it will return error.
+///
+/// ## Example:
+/// ```
+/// assert_eq!(rvv_encode::encode("vle64.v v3, (a0), v0.t", false).unwrap(), Some(0b00000000000001010111000110000111));
+/// ```
 pub fn encode(inst: &str, reserved_only: bool) -> Result<Option<u32>, Error> {
     let pairs = if let Ok(result) = AsmParser::parse(Rule::inst, inst.trim()) {
         result
