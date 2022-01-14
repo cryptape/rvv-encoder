@@ -12,6 +12,10 @@ jobs:
     - name: Run tests
       run: make test
     - name: Clippy 
-      run: make clippy
+      run: |
+        rustup component add clippy
+        make clippy
     - name: Format
-      run: make fmt
+      run: |
+        rustup component add rustfmt
+        make fmt

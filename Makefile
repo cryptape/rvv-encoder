@@ -8,4 +8,4 @@ clippy:
 	cargo clippy --all
 
 fmt:
-	cargo fmt -- --check
+	cargo fmt --all -- --check
