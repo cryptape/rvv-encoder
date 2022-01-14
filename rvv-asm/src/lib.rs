@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn test_vle_n_v() {
         assert_eq!(
-            rvv_asm_inner(&["vle128.v v3, (a0), vm"], None, false)
+            rvv_asm_inner(&["vle128.v v3, (a0), v0.t"], None, false)
                 .unwrap()
                 .to_string(),
             quote!(asm!(".byte 0x87, 0x01, 0x05, 0x10",);).to_string()
