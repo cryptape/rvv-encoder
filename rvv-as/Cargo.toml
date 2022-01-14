@@ -7,6 +7,7 @@ authors = ["Linfeng Qian <thewawar@gmail.com>"]
 keywords = ["rvv", "riscv", "vector", "encode", "cli"]
 description = "Command line tool to encode riscv vector (rvv) instructions"
 repository = "https://github.com/TheWaWaR/rvv-encoder"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

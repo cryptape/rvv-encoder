@@ -5,7 +5,7 @@ test:
 	cd rvv-as && cargo test
 
 clippy:
-	cargo clippy --all
+	cargo clippy --all --tests
 
 fmt:
 	cargo fmt --all -- --check
