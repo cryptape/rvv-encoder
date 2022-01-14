@@ -129,6 +129,40 @@ mod tests {
         let expected_output = quote! {
             asm!(
                 ".byte 0xd7, 0xf2, 0xf9, 0x81",
+                "li {0}, 3",
+                "1: ",
+                "apple_pie:",
+                "li {1}, 4",
+                in (reg) a ,
+                out (reg) hi ,
+            );
+        };
+        assert_eq!(
+            rvv_asm_inner(
+                &[
+                    "vsetvl x5, s3, t6",
+                    "li {0}, 3",
+                    "1: ",
+                    "apple_pie:",
+                    "li {1}, 4",
+                ],
+                Some(&quote! {
+                    in(reg) a,
+                    out(reg) hi,
+                }),
+                false,
+            )
+            .unwrap()
+            .to_string(),
+            expected_output.to_string()
+        );
+    }
+
+    #[test]
+    fn test_multi_asm_named() {
+        let expected_output = quote! {
+            asm!(
+                ".byte 0xd7, 0xf2, 0xf9, 0x81",
                 "li {a}, 3",
                 "1: ",
                 "apple_pie:",
@@ -152,8 +186,8 @@ mod tests {
                 }),
                 false,
             )
-            .unwrap()
-            .to_string(),
+                .unwrap()
+                .to_string(),
             expected_output.to_string()
         );
     }
