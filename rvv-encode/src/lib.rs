@@ -97,6 +97,7 @@ fn gen_inst_code(
     // The order of `simm5`/`vs1` and `vs2` in opcodes-rvv is not the same with v-spec.adoc
     let simm5_idx = arg_cfg.iter().position(|(name, _)| *name == "simm5");
     let vs1_idx = arg_cfg.iter().position(|(name, _)| *name == "vs1");
+    let rs1_idx = arg_cfg.iter().position(|(name, _)| *name == "rs1");
     let vs2_idx = arg_cfg.iter().position(|(name, _)| *name == "vs2");
     let mut arg_cfg_vec = arg_cfg.iter().collect::<Vec<_>>();
     if let (Some(simm5_idx), Some(vs2_idx)) = (simm5_idx, vs2_idx) {
@@ -104,6 +105,9 @@ fn gen_inst_code(
     }
     if let (Some(vs1_idx), Some(vs2_idx)) = (vs1_idx, vs2_idx) {
         arg_cfg_vec.swap(vs1_idx, vs2_idx);
+    }
+    if let (Some(rs1_idx), Some(vs2_idx)) = (rs1_idx, vs2_idx) {
+        arg_cfg_vec.swap(rs1_idx, vs2_idx);
     }
     let arg_cfg_final = &arg_cfg_vec;
 
@@ -340,6 +344,7 @@ mod tests {
             (0b00000010000000001000000101010111, "vadd.vv v2, v0, v1"),
             (0b00000010000000011011000011010111, "vadd.vi v1, v0, 3"),
             (0b00000000000000001011000011010111, "vadd.vi v1, v0, 1, v0.t"),
+            (0b00000010000001100100000011010111, "vadd.vx v1, v0, a2"),
         ] {
             assert_eq!(encode(inst, false).unwrap(), Some(code), "{}", inst);
         }
