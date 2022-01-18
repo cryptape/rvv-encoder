@@ -59,6 +59,7 @@ pub fn encode(inst: &str, reserved_only: bool) -> Result<Option<u32>, Error> {
             }
         }
     }
+    println!("name: {}, args: {:?}", name, args);
     if reserved_only {
         let mut is_reserved = false;
         'outer: for width in [128, 256, 512, 1024] {
@@ -99,14 +100,15 @@ fn gen_inst_code(
     let vs1_idx = arg_cfg.iter().position(|(name, _)| *name == "vs1");
     let rs1_idx = arg_cfg.iter().position(|(name, _)| *name == "rs1");
     let vs2_idx = arg_cfg.iter().position(|(name, _)| *name == "vs2");
+    let last_7bits = base & 0b1111111;
     let mut arg_cfg_vec = arg_cfg.iter().collect::<Vec<_>>();
-    if let (Some(simm5_idx), Some(vs2_idx)) = (simm5_idx, vs2_idx) {
+    if let (Some(simm5_idx), Some(vs2_idx), 0x57) = (simm5_idx, vs2_idx, last_7bits) {
         arg_cfg_vec.swap(simm5_idx, vs2_idx);
     }
-    if let (Some(vs1_idx), Some(vs2_idx)) = (vs1_idx, vs2_idx) {
+    if let (Some(vs1_idx), Some(vs2_idx), 0x57) = (vs1_idx, vs2_idx, last_7bits) {
         arg_cfg_vec.swap(vs1_idx, vs2_idx);
     }
-    if let (Some(rs1_idx), Some(vs2_idx)) = (rs1_idx, vs2_idx) {
+    if let (Some(rs1_idx), Some(vs2_idx), 0x57) = (rs1_idx, vs2_idx, last_7bits) {
         arg_cfg_vec.swap(rs1_idx, vs2_idx);
     }
     let arg_cfg_final = &arg_cfg_vec;
@@ -244,7 +246,7 @@ fn gen_inst_code(
             // FIXME: support segment load/store
             "nf" => 0,
             // FIXME: support `Zvamo`
-            "wd" => 0,
+            "wd" => return Err(anyhow!("Zvamo instructions are not supported.")),
             _ => unreachable!(),
         };
         base |= value << arg_pos;
@@ -286,6 +288,25 @@ impl Vlmul {
 }
 
 fn check_args(name: &str, args: &[&str], number: usize, vm: bool) -> Result<(), Error> {
+    match name {
+        "vfmerge.vfm" | "vadc.vxm" | "vmadc.vxm" | "vsbc.vxm" | "vmsbc.vxm" | "vmerge.vxm"
+        | "vadc.vvm" | "vmadc.vvm" | "vsbc.vvm" | "vmsbc.vvm" | "vmerge.vvm" | "vadc.vim"
+        | "vmadc.vim" | "vmerge.vim" => {
+            if args.len() != number + 1 {
+                return Err(anyhow!(
+                    "Invalid number of arguments for {}, expected: {}, got: {}",
+                    name,
+                    number + 1,
+                    args.len()
+                ));
+            }
+            if args[args.len() - 1] != "v0" {
+                return Err(anyhow!("The last argument of {} must be v0", name));
+            }
+            return Ok(());
+        }
+        _ => {}
+    }
     let (expected, min, max) = if name == "vsetvli" || name == "vsetivli" {
         ("3 <= n <=6".to_string(), 3, 6)
     } else if !vm {
@@ -360,25 +381,223 @@ fn map_x_reg(name: &str, label: &str) -> Result<u32, Error> {
 mod tests {
     use super::*;
 
+    fn assert_inst(code: u32, inst: &str) {
+        let output_code = encode(inst, false).unwrap().unwrap();
+        assert_eq!(output_code, code, "0b{:032b} - {}", output_code, inst);
+    }
+
+    // # configuration setting
+    // # https://github.com/riscv/riscv-v-spec/blob/master/vcfg-format.adoc
+    //
+    // vsetivli     31=1 30=1 zimm10    zimm 14..12=0x7 rd 6..0=0x57
+    // vsetvli      31=0 zimm11          rs1 14..12=0x7 rd 6..0=0x57
+    // vsetvl       31=1 30..25=0x0 rs2  rs1 14..12=0x7 rd 6..0=0x57
     #[test]
-    fn test_insts() {
-        #[allow(clippy::deprecated_cfg_attr)]
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+    fn test_vset() {
         for (code, inst) in [
             (0b10000001111110011111001011010111, "vsetvl x5, s3, t6"),
             (0b00000000000010011111001011010111, "vsetvli x5, s3, e8"),
-            (0b00000010101010011111001011010111, "vsetvli x5, s3, e256, m4"),
-            (0b00001110101010011111001011010111, "vsetvli x5, s3, e256, m4, ta, ma"),
-            (0b11000010101010011111001011010111, "vsetivli x5, 19, e256, m4"),
-            (0b00000000000001010111000110000111, "vle64.v v3, (a0), v0.t"),
-            (0b00000000000001010111000110100111, "vse64.v v3, (a0), v0.t"),
-            (0b00000010000000001000000101010111, "vadd.vv v2, v0, v1"),
-            (0b00000010000000011011000011010111, "vadd.vi v1, v0, 3"),
-            (0b00000000000000001011000011010111, "vadd.vi v1, v0, 1, v0.t"),
-            (0b00000010000001100100000011010111, "vadd.vx v1, v0, a2"),
-            (0b10110010000010111011000101010111, "vnsrl.wi v2, v0, 0x17"),
+            (
+                0b00000010101010011111001011010111,
+                "vsetvli x5, s3, e256, m4",
+            ),
+            (
+                0b00001110101010011111001011010111,
+                "vsetvli x5, s3, e256, m4, ta, ma",
+            ),
+            (
+                0b11000010101010011111001011010111,
+                "vsetivli x5, 19, e256, m4",
+            ),
         ] {
-            assert_eq!(encode(inst, false).unwrap(), Some(code), "{}", inst);
+            assert_inst(code, inst);
         }
+    }
+
+    // vlm.v          31..28=0      27..26=0 25=1 24..20=0xb  rs1 14..12=0x0  vd 6..0=0x07
+    // vle8.v         nf       28=0 27..26=0 vm   24..20=0    rs1 14..12=0x0  vd 6..0=0x07
+    // vle8ff.v       nf       28=0 27..26=0 vm   24..20=0x10 rs1 14..12=0x0  vd 6..0=0x07
+    // vl1re8.v       31..29=0 28=0 27..26=0 25=1 24..20=0x08 rs1 14..12=0x0  vd 6..0=0x07
+    #[test]
+    fn test_rs1_vd_0x07() {
+        for (code, inst) in [
+            // vlm.v     vd, (rs1)
+            (0b00000010101100101000000010000111, "vlm.v v1, (t0)"),
+            // vle8.v    vd, (rs1), vm
+            (0b00000010000000101000000010000111, "vle8.v v1, (t0)"),
+            // vle8ff.v  vd, (rs1), vm
+            (0b00000011000000101000000010000111, "vle8ff.v v1, (t0)"),
+            // vl1re8.v  vd, (rs1)
+            (0b00000010100000101000000010000111, "vl1re8.v v1, (t0)"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+    // vsm.v          31..28=0      27..26=0 25=1 24..20=0xb  rs1 14..12=0x0 vs3 6..0=0x27
+    // vse8.v         nf       28=0 27..26=0 vm   24..20=0    rs1 14..12=0x0 vs3 6..0=0x27
+    // vs1r.v         31..29=0 28=0 27..26=0 25=1 24..20=0x08 rs1 14..12=0x0 vs3 6..0=0x27
+    #[test]
+    fn test_rs1_vs3_0x27() {
+        for (code, inst) in [
+            // vsm.v     vs3, (rs1)
+            (0b00000010101100101000000010100111, "vsm.v v1, (t0)"),
+            // vse8.v    vs3, (rs1), vm
+            (0b00000010000000101000000010100111, "vse8.v v1, (t0)"),
+            // vs1r.v    vs3, (rs1)
+            (0b00000010100000101000000010100111, "vs1r.v v1, (t0)"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vluxei8.v  nf 28=0 27..26=1 vm vs2 rs1 14..12=0x0  vd 6..0=0x07
+    // vloxei8.v  nf 28=0 27..26=3 vm vs2 rs1 14..12=0x0  vd 6..0=0x07
+    #[test]
+    fn test_vs2_rs1_vd_0x07() {
+        for (code, inst) in [
+            // vluxei8.v    vd, (rs1), vs2, vm
+            (0b00000110001000101000000010000111, "vluxei8.v v1, (t0), v2"),
+            // vloxei8.v    vd, (rs1), vs2, vm
+            (0b00001110001000101000000010000111, "vloxei8.v v1, (t0), v2"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+    // vsuxei8.v      nf 28=0 27..26=1 vm vs2 rs1 14..12=0x0 vs3 6..0=0x27
+    // vsoxei8.v      nf 28=0 27..26=3 vm vs2 rs1 14..12=0x0 vs3 6..0=0x27
+    #[test]
+    fn test_vs2_rs1_vs3_0x27() {
+        for (code, inst) in [
+            // vsuxei8.v   vs3, (rs1), vs2, vm
+            (0b00000110001000101000000010100111, "vsuxei8.v v1, (t0), v2"),
+            // vsoxei8.v   vs3, (rs1), vs2, vm
+            (0b00001110001000101000000010100111, "vsoxei8.v v1, (t0), v2"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vlse8.v         nf 28=0 27..26=2 vm rs2 rs1 14..12=0x0  vd 6..0=0x07
+    #[test]
+    fn test_rs2_rs1_vd_0x07() {
+        // vlse8.v    vd, (rs1), rs2, vm
+        assert_inst(0b00001010011000101000000010000111, "vlse8.v v1, (t0), t1");
+    }
+
+    // vsse8.v         nf 28=0 27..26=2 vm rs2 rs1 14..12=0x0 vs3 6..0=0x27
+    #[test]
+    fn test_rs2_rs1_vs3_0x27() {
+        // vsse8.v    vs3, (rs1), rs2, vm
+        assert_inst(0b00001010011000101000000010100111, "vsse8.v v1, (t0), t1");
+    }
+
+    // vfadd.vf       31..26=0x00 vm   vs2 rs1 14..12=0x5 vd 6..0=0x57
+    // vfmerge.vfm    31..26=0x17 25=0 vs2 rs1 14..12=0x5 vd 6..0=0x57
+    #[test]
+    fn test_vs2_rs1_vd_0x57() {
+        for (code, inst) in [
+            // vfadd.vf    vd, vs2, rs1, vm
+            (0b00000010001000101101000011010111, "vfadd.vf v1, v2, t0"),
+            // vfmerge.vfm vd, vs2, rs1, v0
+            (
+                0b01011100001000101101000011010111,
+                "vfmerge.vfm v1, v2, t0, v0",
+            ),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vfmv.s.f       31..26=0x10 25=1 24..20=0 rs1 14..12=0x5 vd 6..0=0x57
+    // vmv.v.x        31..26=0x17 25=1 24..20=0 rs1 14..12=0x4 vd 6..0=0x57
+    #[test]
+    fn test_rs1_vd_0x57() {
+        for (code, inst) in [
+            // vfmv.s.f vd, rs1
+            (0b01000010000000101101000011010111, "vfmv.s.f v1, t0"),
+            // vmv.v.x  vd, rs1
+            (0b01011110000000101100000011010111, "vmv.v.x v1, t0"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vfadd.vv       31..26=0x00 vm   vs2 vs1 14..12=0x1 vd 6..0=0x57
+    // vadc.vvm       31..26=0x10 25=0 vs2 vs1 14..12=0x0 vd 6..0=0x57
+    #[test]
+    fn test_vs2_vs1_vd_0x57() {
+        for (code, inst) in [
+            // vfadd.vv   vd, vs2, vs1, vm
+            (0b00000010001000011001000011010111, "vfadd.vv v1, v2, v3"),
+            // vadc.vvm   vd, vs2, vs1, v0
+            (
+                0b01000000001000011000000011010111,
+                "vadc.vvm v1, v2, v3, v0",
+            ),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vfmv.f.s       31..26=0x10 25=1 vs2 19..15=0    14..12=0x1 rd 6..0=0x57
+    // vcpop.m        31..26=0x10 vm   vs2 19..15=0x10 14..12=0x2 rd 6..0=0x57
+    #[test]
+    fn test_vs2_rd_0x57() {
+        // vfmv.f.s rd, vs2
+        // vcpop.m  rd, vs2, vm
+        for (code, inst) in [
+            (0b01000010001000000001001011010111, "vfmv.f.s t0, v2"),
+            (0b01000010001010000010001011010111, "vcpop.m t0, v2"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vfcvt.xu.f.v     31..26=0x12 vm   vs2 19..15=0x00 14..12=0x1 vd 6..0=0x57
+    // vmv1r.v          31..26=0x27 25=1 vs2 19..15=0    14..12=0x3 vd 6..0=0x57
+    #[test]
+    fn test_vs2_vd_0x57() {
+        for (code, inst) in [
+            // vfcvt.xu.f.v vd, vs2, vm
+            (0b01001010001000000001000011010111, "vfcvt.xu.f.v v1, v2"),
+            // vmv<nr>r.v   vd, vs2
+            (0b10011110001000000011000011010111, "vmv1r.v v1, v2"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vmv.v.v        31..26=0x17 25=1 24..20=0 vs1 14..12=0x0 vd 6..0=0x57
+    #[test]
+    fn test_vs1_vd_0x57() {
+        // vmv.v.v vd, vs1
+        assert_inst(0b01011110000000010000000011010111, "vmv.v.v v1, v2");
+    }
+
+    // vadd.vi        31..26=0x00 vm   vs2 simm5 14..12=0x3 vd 6..0=0x57
+    // vadc.vim       31..26=0x10 25=0 vs2 simm5 14..12=0x3 vd 6..0=0x57
+    #[test]
+    fn test_vs2_simm5_vd_0x57() {
+        for (code, inst) in [
+            // vadd.vi    vd, vs2, imm, vm
+            (0b00000010001000101011000011010111, "vadd.vi  v1, v2, -5"),
+            // vadc.vim   vd, vs2, imm, v0
+            (0b01000000001000101011000011010111, "vadc.vim v1, v2, 5, v0"),
+        ] {
+            assert_inst(code, inst);
+        }
+    }
+
+    // vmv.v.i        31..26=0x17 25=1 24..20=0 simm5 14..12=0x3 vd 6..0=0x57
+    #[test]
+    fn test_simm5_vd_0x57() {
+        // vmv.v.i vd, imm
+        assert_inst(0b01011110000000101011000011010111, "vmv.v.i v1, 0x5");
+    }
+    // vid.v          31..26=0x14 vm 24..20=0 19..15=0x11 14..12=0x2 vd 6..0=0x57
+    #[test]
+    fn test_vd_0x57() {
+        // vid.v vd, vm
+        assert_inst(0b01010010000010001010000011010111, "vid.v v1");
     }
 }
