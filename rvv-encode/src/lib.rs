@@ -121,21 +121,52 @@ fn gen_inst_code(
         arg_cfg_final.len()
     };
     check_args(name, args, number, has_vm)?;
+    println!("args: {:?}, arg_cfg_final: {:?}", args, arg_cfg_final);
     for (idx, (arg_name, arg_pos)) in arg_cfg_final.iter().rev().enumerate() {
         let value = match *arg_name {
             "rs1" | "rs2" | "rd" => map_x_reg(args[idx], arg_name)?,
             "vs1" | "vs2" | "vs3" | "vd" => map_v_reg(args[idx], arg_name)?,
             "simm5" => {
-                let value = args[idx]
-                    .parse::<i8>()
-                    .map_err(|_| anyhow!("Parse simm5 value failed: {}", args[idx]))?;
-                if value < -15 || value > 16 {
-                    return Err(anyhow!(
-                        "Simm5 value out of range: {} expected: [-15, 16]",
-                        value
-                    ));
-                }
-                (value as u8 & 0b00011111) as u32
+                let arg_current_string = args[idx].to_lowercase();
+                let (is_neg, arg_current) = if arg_current_string.starts_with("-") {
+                    (true, &arg_current_string[1..])
+                } else {
+                    (false, arg_current_string.as_str())
+                };
+                let value = if is_neg {
+                    let value = if arg_current.starts_with("0x") {
+                        i8::from_str_radix(&arg_current[2..], 16)
+                            .map_err(|_| anyhow!("Parse simm5 value failed: {}", arg_current))?
+                    } else {
+                        arg_current
+                            .parse::<i8>()
+                            .map_err(|_| anyhow!("Parse simm5 value failed: {}", arg_current))?
+                    };
+                    if value < -15 || value > 16 {
+                        return Err(anyhow!(
+                            "Simm5 value out of range: {} expected: [-15, 16]",
+                            value
+                        ));
+                    }
+                    value as u8
+                } else {
+                    let value = if arg_current.starts_with("0x") {
+                        u8::from_str_radix(&arg_current[2..], 16)
+                            .map_err(|_| anyhow!("Parse uimm5 value failed: {}", arg_current))?
+                    } else {
+                        arg_current
+                            .parse::<u8>()
+                            .map_err(|_| anyhow!("Parse uimm5 value failed: {}", arg_current))?
+                    };
+                    if value > 31 {
+                        return Err(anyhow!(
+                            "Uimm5 value out of range: {} expected: [0, 31]",
+                            value
+                        ));
+                    }
+                    value
+                };
+                (value & 0b00011111) as u32
             }
             "zimm" => {
                 let value = args[idx]
@@ -345,6 +376,7 @@ mod tests {
             (0b00000010000000011011000011010111, "vadd.vi v1, v0, 3"),
             (0b00000000000000001011000011010111, "vadd.vi v1, v0, 1, v0.t"),
             (0b00000010000001100100000011010111, "vadd.vx v1, v0, a2"),
+            (0b10110010000010111011000101010111, "vnsrl.wi v2, v0, 0x17"),
         ] {
             assert_eq!(encode(inst, false).unwrap(), Some(code), "{}", inst);
         }

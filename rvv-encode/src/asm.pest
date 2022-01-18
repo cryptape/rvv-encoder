@@ -22,7 +22,8 @@ inst_arg_addr = _{ "(" ~ inst_arg_simple ~ ")" }
 // to visually encode the use of a mask.
 inst_arg_mask = @{ "v0.t" }
 
-integer = @{ ("+" | "-")? ~ int }
+integer = @{ ("-")? ~ (hexint | int) }
+hexint = @{ ("0x" | "0X" ) ~ ASCII_HEX_DIGIT{2} }
 int     = @{ "0" | (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
 
 WHITESPACE = _{ " " | "\t" | NEWLINE }
