@@ -59,7 +59,6 @@ pub fn encode(inst: &str, reserved_only: bool) -> Result<Option<u32>, Error> {
             }
         }
     }
-    println!("name: {}, args: {:?}", name, args);
     if reserved_only {
         let mut is_reserved = false;
         'outer: for width in [128, 256, 512, 1024] {
@@ -123,19 +122,13 @@ fn gen_inst_code(
         arg_cfg_final.len()
     };
     check_args(name, args, number, has_vm)?;
-    println!("args: {:?}, arg_cfg_final: {:?}", args, arg_cfg_final);
     for (idx, (arg_name, arg_pos)) in arg_cfg_final.iter().rev().enumerate() {
         let value = match *arg_name {
             "rs1" | "rs2" | "rd" => map_x_reg(args[idx], arg_name)?,
             "vs1" | "vs2" | "vs3" | "vd" => map_v_reg(args[idx], arg_name)?,
             "simm5" => {
-                let arg_current_string = args[idx].to_lowercase();
-                let (is_neg, arg_current) = if arg_current_string.starts_with("-") {
-                    (true, &arg_current_string[1..])
-                } else {
-                    (false, arg_current_string.as_str())
-                };
-                let value = if is_neg {
+                let arg_current = args[idx].to_lowercase();
+                let value = if arg_current.starts_with("-") {
                     let value = if arg_current.starts_with("0x") {
                         i8::from_str_radix(&arg_current[2..], 16)
                             .map_err(|_| anyhow!("Parse simm5 value failed: {}", arg_current))?
@@ -580,7 +573,7 @@ mod tests {
     fn test_vs2_simm5_vd_0x57() {
         for (code, inst) in [
             // vadd.vi    vd, vs2, imm, vm
-            (0b00000010001000101011000011010111, "vadd.vi  v1, v2, -5"),
+            (0b00000010001011011011000011010111, "vadd.vi  v1, v2, -5"),
             // vadc.vim   vd, vs2, imm, v0
             (0b01000000001000101011000011010111, "vadc.vim v1, v2, 5, v0"),
         ] {
