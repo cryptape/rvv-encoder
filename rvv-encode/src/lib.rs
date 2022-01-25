@@ -374,6 +374,11 @@ fn map_x_reg(name: &str, label: &str) -> Result<u32, Error> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_riscvgc() {
+        assert_eq!(encode("add {abc_t}, {abc}, 3", false).unwrap(), None);
+    }
+
     fn assert_inst(code: u32, inst: &str) {
         let output_code = encode(inst, false).unwrap().unwrap();
         assert_eq!(output_code, code, "0b{:032b} - {}", output_code, inst);

@@ -1,7 +1,6 @@
 // asm = { label | inst }
 
-label = @{ SOI ~ (label_ident | label_num) ~ ":" ~ EOI }
-label_ident = @{ (ASCII_ALPHA | "_")+ ~ (ASCII_ALPHANUMERIC | "_")* }
+label = @{ SOI ~ (ident | label_num) ~ ":" ~ EOI }
 label_num = @{ ASCII_DIGIT+ }
 
 inst = { inst_name ~ inst_args }
@@ -9,9 +8,11 @@ inst_name = @{ inst_name_part ~ ("." ~ inst_name_part )* }
 inst_name_part = @{ ASCII_ALPHA_LOWER+ ~ (ASCII_DIGIT | ASCII_ALPHA_LOWER)* }
 inst_args = _{ inst_arg ~ ("," ~ inst_arg)* }
 inst_arg = { inst_arg_mask | inst_arg_simple | inst_arg_addr | integer | inst_arg_variable }
-inst_arg_variable = { "{" ~ (inst_arg_simple | int) ~ "}" }
+inst_arg_variable = { "{" ~ (ident | int) ~ "}" }
 inst_arg_simple = @{ ASCII_ALPHA_LOWER+ ~ ASCII_DIGIT* }
 inst_arg_addr = _{ "(" ~ inst_arg_simple ~ ")" }
+
+ident = @{ (ASCII_ALPHA | "_")+ ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // from: [riscv-v-spec/v-spec.adoc]
 // Even though current vector extensions only support one vector
