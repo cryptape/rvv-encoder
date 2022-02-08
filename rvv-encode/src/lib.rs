@@ -137,9 +137,9 @@ fn gen_inst_code(
                             .parse::<i8>()
                             .map_err(|_| anyhow!("Parse simm5 value failed: {}", arg_current))?
                     };
-                    if value < -15 || value > 16 {
+                    if value < -16 || value > 15 {
                         return Err(anyhow!(
-                            "Simm5 value out of range: {} expected: [-15, 16]",
+                            "Simm5 value out of range: {} expected: [-16, 15]",
                             value
                         ));
                     }
@@ -410,6 +410,18 @@ mod tests {
         ] {
             assert_inst(code, inst);
         }
+    }
+
+    #[test]
+    fn test_simm5_range() {
+        for (code, inst) in [
+            (0b00000010001010000011000011010111, "vadd.vi  v1, v2, -16"),
+            (0b00000010001001111011000011010111, "vadd.vi  v1, v2, 15"),
+        ] {
+            assert_inst(code, inst);
+        }
+
+        assert!(encode("vadd.vi  v1, v2, -17", false).is_err());
     }
 
     // vlm.v          31..28=0      27..26=0 25=1 24..20=0xb  rs1 14..12=0x0  vd 6..0=0x07
