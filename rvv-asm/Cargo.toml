@@ -1,6 +1,6 @@
 [package]
 name = "rvv-asm"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2018"
 license = "MIT"
 authors = ["Linfeng Qian <thewawar@gmail.com>"]
@@ -19,6 +19,6 @@ anyhow = "1.0.44"
 quote = "1.0.9"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 syn = { version = "1.0.80", features = ["extra-traits", "full", "fold", "printing"] }
-rvv-encode = { version = "0.1.9", path = "../rvv-encode" }
+rvv-encode = { version = "0.1.10", path = "../rvv-encode" }
 
 [dev-dependencies]
