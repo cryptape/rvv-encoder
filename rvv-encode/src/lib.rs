@@ -128,9 +128,9 @@ fn gen_inst_code(
             "vs1" | "vs2" | "vs3" | "vd" => map_v_reg(args[idx], arg_name)?,
             "simm5" => {
                 let arg_current = args[idx].to_lowercase();
-                let value = if arg_current.starts_with("-") {
-                    let value = if arg_current.starts_with("0x") {
-                        i8::from_str_radix(&arg_current[2..], 16)
+                let value = if arg_current.starts_with('-') {
+                    let value = if let Some(content) = arg_current.strip_prefix("0x") {
+                        i8::from_str_radix(content, 16)
                             .map_err(|_| anyhow!("Parse simm5 value failed: {}", arg_current))?
                     } else {
                         arg_current
@@ -145,8 +145,8 @@ fn gen_inst_code(
                     }
                     value as u8
                 } else {
-                    let value = if arg_current.starts_with("0x") {
-                        u8::from_str_radix(&arg_current[2..], 16)
+                    let value = if let Some(content) = arg_current.strip_prefix("0x") {
+                        u8::from_str_radix(content, 16)
                             .map_err(|_| anyhow!("Parse uimm5 value failed: {}", arg_current))?
                     } else {
                         arg_current

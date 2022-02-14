@@ -186,6 +186,7 @@ mod tests {
             asm!(
                 ".byte 0xd7, 0xf2, 0xf9, 0x81",
                 "1: ",
+                "mv {}, t0",
                 "li {a}, 3",
                 "apple_pie:",
                 "li {hi}, 4",
@@ -198,6 +199,7 @@ mod tests {
                 &[
                     "vsetvl x5, s3, t6",
                     "1: ",
+                    "mv {}, t0",
                     "li {a}, 3",
                     "apple_pie:",
                     "li {hi}, 4",
