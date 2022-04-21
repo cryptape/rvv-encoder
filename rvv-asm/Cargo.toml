@@ -1,6 +1,6 @@
 [package]
 name = "rvv-asm"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2018"
 license = "MIT"
 authors = ["Linfeng Qian <thewawar@gmail.com>"]

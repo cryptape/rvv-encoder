@@ -181,11 +181,17 @@ fn gen_inst_code(
                 let mut lmul = Vlmul::M1;
                 let mut ta = false;
                 let mut ma = false;
+                let mut tu = false;
+                let mut mu = false;
                 for arg_str in &args[idx..] {
                     if *arg_str == "ta" {
                         ta = true;
                     } else if *arg_str == "ma" {
                         ma = true;
+                    } else if *arg_str == "tu" {
+                        tu = true;
+                    } else if *arg_str == "mu" {
+                        mu = true;
                     } else if arg_str.as_bytes()[0] == b'e' {
                         let sew = arg_str[1..]
                             .parse::<u16>()
@@ -212,12 +218,20 @@ fn gen_inst_code(
                             .ok_or_else(|| anyhow!("Invalid LMUL value format: {}", arg_str))?;
                     } else {
                         return Err(anyhow!(
-                            "Invalid argument for {}, expected: e{{n}}/m{{n}}/ta/ma, got: {}",
+                            "Invalid argument for {}, expected: e{{n}}/m{{n}}/ta/ma/tu/mu, got: {}",
                             name,
                             arg_str
                         ));
                     }
                 }
+
+                if ta && tu {
+                    return Err(anyhow!("ta/tu can not both exists"));
+                }
+                if ma && mu {
+                    return Err(anyhow!("ma/mu can not both exists"));
+                }
+
                 let mut value = lmul as u8;
                 value |= vsew << 3;
                 if ta {
@@ -406,6 +420,22 @@ mod tests {
             (
                 0b11000010101010011111001011010111,
                 "vsetivli x5, 19, e256, m4",
+            ),
+            (
+                0b11000010101010011111001011010111,
+                "vsetivli x5, 19, e256, m4, tu, mu",
+            ),
+            (
+                0b11001010101010011111001011010111,
+                "vsetivli x5, 19, e256, m4, tu, ma",
+            ),
+            (
+                0b11000110101010011111001011010111,
+                "vsetivli x5, 19, e256, m4, ta, mu",
+            ),
+            (
+                0b11001110101010011111001011010111,
+                "vsetivli x5, 19, e256, m4, ta, ma",
             ),
         ] {
             assert_inst(code, inst);
