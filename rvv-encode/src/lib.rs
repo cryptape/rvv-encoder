@@ -14,6 +14,74 @@ mod asm_parser {
 }
 use asm_parser::{AsmParser, Rule};
 
+// The last register must be `v0`
+const V0_TAIL_INSTS: [&str; 14] = [
+    "vfmerge.vfm",
+    "vadc.vxm",
+    "vmadc.vxm",
+    "vsbc.vxm",
+    "vmsbc.vxm",
+    "vmerge.vxm",
+    "vadc.vvm",
+    "vmadc.vvm",
+    "vsbc.vvm",
+    "vmsbc.vvm",
+    "vmerge.vvm",
+    "vadc.vim",
+    "vmadc.vim",
+    "vmerge.vim",
+];
+
+// https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#101-vector-arithmetic-instruction-encoding
+//
+// NOTE: For ternary multiply-add operations, the assembler syntax always places the
+// destination vector register first, followed by either rs1 or vs1, then vs2.
+// This ordering provides a more natural reading of the assembler for these
+// ternary operations, as the multiply operands are always next to each other.
+const VV_TERNARY_INSTS: [&str; 19] = [
+    "vmacc.vv",
+    "vnmsac.vv",
+    "vmadd.vv",
+    "vnmsub.vv",
+    "vwmaccu.vv",
+    "vwmacc.vv",
+    "vwmaccsu.vv",
+    "vfmacc.vv",
+    "vfnmacc.vv",
+    "vfmsac.vv",
+    "vfnmsac.vv",
+    "vfmadd.vv",
+    "vfnmadd.vv",
+    "vfmsub.vv",
+    "vfnmsub.vv",
+    "vfwmacc.vv",
+    "vfwnmacc.vv",
+    "vfwmsac.vv",
+    "vfwnmsac.vv",
+];
+const VX_VF_TERNARY_INSTS: [&str; 20] = [
+    "vmacc.vx",
+    "vnmsac.vx",
+    "vmadd.vx",
+    "vnmsub.vx",
+    "vwmaccu.vx",
+    "vwmacc.vx",
+    "vwmaccsu.vx",
+    "vwmaccus.vx",
+    "vfmacc.vf",
+    "vfnmacc.vf",
+    "vfmsac.vf",
+    "vfnmsac.vf",
+    "vfmadd.vf",
+    "vfnmadd.vf",
+    "vfmsub.vf",
+    "vfnmsub.vf",
+    "vfwmacc.vf",
+    "vfwnmacc.vf",
+    "vfwmsac.vf",
+    "vfwnmsac.vf",
+];
+
 /// Convert one RISC-V Vector Extension(RVV) instruction into code.
 ///
 /// This function try to parse the instruction as normal asm instruction or
@@ -105,10 +173,14 @@ fn gen_inst_code(
         arg_cfg_vec.swap(simm5_idx, vs2_idx);
     }
     if let (Some(vs1_idx), Some(vs2_idx), 0x57) = (vs1_idx, vs2_idx, last_7bits) {
-        arg_cfg_vec.swap(vs1_idx, vs2_idx);
+        if !VV_TERNARY_INSTS.contains(&name) {
+            arg_cfg_vec.swap(vs1_idx, vs2_idx);
+        }
     }
     if let (Some(rs1_idx), Some(vs2_idx), 0x57) = (rs1_idx, vs2_idx, last_7bits) {
-        arg_cfg_vec.swap(rs1_idx, vs2_idx);
+        if !VX_VF_TERNARY_INSTS.contains(&name) {
+            arg_cfg_vec.swap(rs1_idx, vs2_idx);
+        }
     }
     let arg_cfg_final = &arg_cfg_vec;
 
@@ -295,24 +367,19 @@ impl Vlmul {
 }
 
 fn check_args(name: &str, args: &[&str], number: usize, vm: bool) -> Result<(), Error> {
-    match name {
-        "vfmerge.vfm" | "vadc.vxm" | "vmadc.vxm" | "vsbc.vxm" | "vmsbc.vxm" | "vmerge.vxm"
-        | "vadc.vvm" | "vmadc.vvm" | "vsbc.vvm" | "vmsbc.vvm" | "vmerge.vvm" | "vadc.vim"
-        | "vmadc.vim" | "vmerge.vim" => {
-            if args.len() != number + 1 {
-                return Err(anyhow!(
-                    "Invalid number of arguments for {}, expected: {}, got: {}",
-                    name,
-                    number + 1,
-                    args.len()
-                ));
-            }
-            if args[args.len() - 1] != "v0" {
-                return Err(anyhow!("The last argument of {} must be v0", name));
-            }
-            return Ok(());
+    if V0_TAIL_INSTS.contains(&name) {
+        if args.len() != number + 1 {
+            return Err(anyhow!(
+                "Invalid number of arguments for {}, expected: {}, got: {}",
+                name,
+                number + 1,
+                args.len()
+            ));
         }
-        _ => {}
+        if args[args.len() - 1] != "v0" {
+            return Err(anyhow!("The last argument of {} must be v0", name));
+        }
+        return Ok(());
     }
     let (expected, min, max) = if name == "vsetvli" || name == "vsetivli" {
         ("3 <= n <=6".to_string(), 3, 6)
@@ -533,6 +600,7 @@ mod tests {
 
     // vfadd.vf       31..26=0x00 vm   vs2 rs1 14..12=0x5 vd 6..0=0x57
     // vfmerge.vfm    31..26=0x17 25=0 vs2 rs1 14..12=0x5 vd 6..0=0x57
+    // vmacc.vx       31..26=0x2d vm   vs2 rs1 14..12=0x6 vd 6..0=0x57
     #[test]
     fn test_vs2_rs1_vd_0x57() {
         for (code, inst) in [
@@ -543,6 +611,8 @@ mod tests {
                 0b01011100001000101101000011010111,
                 "vfmerge.vfm v1, v2, t0, v0",
             ),
+            // vmacc.vx vd, rs1, vs2, vm
+            (0b10110110000101100110000111010111, "vmacc.vx v3, a2, v1"),
         ] {
             assert_inst(code, inst);
         }
@@ -564,6 +634,7 @@ mod tests {
 
     // vfadd.vv       31..26=0x00 vm   vs2 vs1 14..12=0x1 vd 6..0=0x57
     // vadc.vvm       31..26=0x10 25=0 vs2 vs1 14..12=0x0 vd 6..0=0x57
+    // vmacc.vv       31..26=0x2d vm   vs2 vs1 14..12=0x2 vd 6..0=0x57
     #[test]
     fn test_vs2_vs1_vd_0x57() {
         for (code, inst) in [
@@ -574,6 +645,8 @@ mod tests {
                 0b01000000001000011000000011010111,
                 "vadc.vvm v1, v2, v3, v0",
             ),
+            // vmacc.vv vd, vs1, vs2, vm
+            (0b10110110001000001010000111010111, "vmacc.vv v3, v1, v2"),
         ] {
             assert_inst(code, inst);
         }
