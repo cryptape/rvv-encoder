@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "rvv-as"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "clap",
  "rvv-encode",
@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "rvv-asm"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "proc-macro2",
@@ -294,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "rvv-encode"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "pest",
