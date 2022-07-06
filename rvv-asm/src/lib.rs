@@ -11,6 +11,11 @@ use syn::punctuated::Punctuated;
 
 /// Convert RISC-V Vector Extension to `.byte 0x00, 0x11, 0xaa, 0xbb` format asm instructions.
 ///
+/// ## NOTE:
+/// Since currently don't find a way to tell llvm don't reorder
+/// instructions, please make sure put all `rvv_asm!` macros in `inline`
+/// function.
+///
 /// ## Example:
 /// Compile will fail due to target not supported on develop/CI machine.
 /// ```compile_fail
