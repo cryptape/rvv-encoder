@@ -713,4 +713,14 @@ mod tests {
         // vid.v vd, vm
         assert_inst(0b01010010000010001010000011010111, "vid.v v1");
     }
+
+    // vmandn.mm      31..26=0x18 vm vs2 vs1 14..12=0x2 vd 6..0=0x57
+    // vmorn.mm       31..26=0x1c vm vs2 vs1 14..12=0x2 vd 6..0=0x57
+    #[test]
+    fn test_vmandn_vmorn() {
+        // vmandn.mm vd, vs2, vs1
+        assert_inst(0b01100010001000011010000011010111, "vmandn.mm v1, v2, v3");
+        // vmorn.mm  vd, vs2, vs1
+        assert_inst(0b01110010001000011010000011010111, "vmorn.mm v1, v2, v3");
+    }
 }
