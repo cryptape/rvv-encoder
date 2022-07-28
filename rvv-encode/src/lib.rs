@@ -458,6 +458,9 @@ mod tests {
     #[test]
     fn test_riscvgc() {
         assert_eq!(encode("add {abc_t}, {abc}, 3", false).unwrap(), None);
+        assert_eq!(encode("add a1, a1, a2", false).unwrap(), None);
+        assert_eq!(encode("jr t0", false).unwrap(), None);
+        assert_eq!(encode("fence", false).unwrap(), None);
     }
 
     fn assert_inst(code: u32, inst: &str) {
