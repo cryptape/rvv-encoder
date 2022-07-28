@@ -1,6 +1,6 @@
 [package]
 name = "rvv-as"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2018"
 license = "MIT"
 authors = ["Linfeng Qian <thewawar@gmail.com>"]
@@ -13,4 +13,4 @@ readme = "README.md"
 
 [dependencies]
 clap = { version = "3.0.6", features = ["derive"] }
-rvv-encode = { version = "0.2.0", path = "../rvv-encode" }
+rvv-encode = { version = "0.2.1", path = "../rvv-encode" }

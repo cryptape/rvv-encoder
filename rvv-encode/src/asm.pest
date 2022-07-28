@@ -3,7 +3,7 @@
 label = @{ SOI ~ (ident | label_num) ~ ":" ~ EOI }
 label_num = @{ ASCII_DIGIT+ }
 
-inst = { inst_name ~ inst_args }
+inst = { inst_name ~ inst_args? }
 inst_name = @{ inst_name_part ~ ("." ~ inst_name_part )* }
 inst_name_part = @{ ASCII_ALPHA_LOWER+ ~ (ASCII_DIGIT | ASCII_ALPHA_LOWER)* }
 inst_args = _{ inst_arg ~ ("," ~ inst_arg)* }
